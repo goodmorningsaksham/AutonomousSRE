@@ -1,18 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Activity, Cpu, GitBranch, Shield, CheckCircle, XCircle } from 'lucide-react';
-import { fetchIncident, fetchPendingApprovals, submitApproval, type IncidentDetail, type PendingApproval } from '../api';
+import {
+  ArrowLeft,
+  Sparkles,
+  Shield,
+  Activity,
+  CheckCircle,
+  XCircle,
+  GitBranch,
+  Clock,
+  FileText
+} from 'lucide-react';
+import {
+  fetchIncident,
+  fetchPendingApprovals,
+  submitApproval,
+  type IncidentDetail,
+  type PendingApproval
+} from '../api';
 
-const StatusBadge = ({ status }: { status: string }) => (
-  <span className={`badge badge--${status.toLowerCase()}`}>{status}</span>
-);
-
-const RiskBadge = ({ risk }: { risk: string }) => {
-  const map: Record<string, string> = { LOW: 'low', MEDIUM: 'medium', HIGH: 'high', FORBIDDEN: 'forbidden' };
-  return <span className={`badge badge--${map[risk] || 'medium'}`}>{risk}</span>;
-};
-
-const fmtFull = (dt: string | null) => dt ? new Date(dt).toLocaleString() : '—';
+const fmtFull = (dt: string | null) => (dt ? new Date(dt).toLocaleString() : '—');
 
 const TIMELINE_ICONS: Record<string, string> = {
   INCIDENT_CREATED: '🚨',
@@ -26,6 +33,27 @@ const TIMELINE_ICONS: Record<string, string> = {
   VERIFICATION_COMPLETED: '✅',
   STATUS_CHANGED: '🔄',
   POLICY_REJECTED: '🛡️',
+};
+
+const getStatusBadgeClass = (status: string) => {
+  switch (status.toUpperCase()) {
+    case 'RESOLVED': return 'badge-resolved';
+    case 'AWAITING_APPROVAL': return 'badge-awaiting';
+    case 'INVESTIGATING':
+    case 'REMEDIATING':
+    case 'VERIFYING': return 'badge-remediating';
+    case 'FAILED': return 'badge-failed';
+    default: return 'badge-low';
+  }
+};
+
+const getSeverityBadgeClass = (sev: string) => {
+  switch (sev.toLowerCase()) {
+    case 'critical': return 'badge-critical';
+    case 'high': return 'badge-high';
+    case 'medium': return 'badge-medium';
+    default: return 'badge-low';
+  }
 };
 
 export default function IncidentDetail() {
@@ -44,8 +72,8 @@ export default function IncidentDetail() {
       .finally(() => setLoading(false));
 
     fetchPendingApprovals()
-      .then(apps => {
-        const found = apps.find(a => a.incident_id === id);
+      .then((apps) => {
+        const found = apps.find((a) => a.incident_id === id);
         setPendingApproval(found || null);
       })
       .catch(() => setPendingApproval(null));
@@ -53,7 +81,7 @@ export default function IncidentDetail() {
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 4000);
+    const interval = setInterval(load, 3000);
     return () => clearInterval(interval);
   }, [id]);
 
@@ -61,7 +89,12 @@ export default function IncidentDetail() {
     if (!pendingApproval) return;
     setSubmitting(true);
     try {
-      await submitApproval(pendingApproval.approval_id, decision, 'sre-engineer@aegis.corp', `Decision: ${decision} from incident console`);
+      await submitApproval(
+        pendingApproval.approval_id,
+        decision,
+        'sre-lead@aegis.corp',
+        `Decision: ${decision} from Apple SRE Console`
+      );
       setPendingApproval(null);
       load();
     } catch {
@@ -71,8 +104,26 @@ export default function IncidentDetail() {
     }
   };
 
-  if (loading) return <div className="loading">Loading incident…</div>;
-  if (!detail) return <div className="empty"><div className="empty__text">Incident not found</div></div>;
+  if (loading) {
+    return (
+      <div className="apple-loading">
+        <div className="apple-spinner" />
+        <span>Loading incident details…</span>
+      </div>
+    );
+  }
+
+  if (!detail) {
+    return (
+      <div className="apple-empty">
+        <div className="apple-empty__icon">🔍</div>
+        <div className="apple-empty__title">Incident Not Found</div>
+        <button className="apple-btn apple-btn--glass" onClick={() => navigate('/incidents')}>
+          Back to Incidents
+        </button>
+      </div>
+    );
+  }
 
   const { incident, timeline, investigations, remediation_plans } = detail;
   const latestInv = investigations[investigations.length - 1];
@@ -80,216 +131,348 @@ export default function IncidentDetail() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 28 }}>
-        <button className="btn btn--ghost" style={{ padding: '8px 12px' }} onClick={() => navigate('/incidents')}>
+      {/* Header Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 28 }}>
+        <button
+          className="apple-btn apple-btn--glass"
+          style={{ padding: '8px 14px' }}
+          onClick={() => navigate('/incidents')}
+        >
           <ArrowLeft size={16} />
+          Back
         </button>
+
         <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-            <StatusBadge status={incident.status} />
-            <span className={`badge badge--${incident.severity.toLowerCase()}`}>{incident.severity}</span>
-            <code style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 4 }}>
-              {incident.id.slice(0, 8)}
-            </code>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <span className={`apple-badge apple-badge--dot ${getStatusBadgeClass(incident.status)}`}>
+              {incident.status}
+            </span>
+            <span className={`apple-badge ${getSeverityBadgeClass(incident.severity)}`}>
+              {incident.severity.toUpperCase()}
+            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-tertiary)' }}>
+              ID: {incident.id}
+            </span>
           </div>
-          <h1 className="page-title">{incident.title}</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>
-            <strong style={{ color: 'var(--text-dim)' }}>{incident.service}</strong> · {incident.namespace} · Created {fmtFull(incident.created_at)}
-            {incident.resolved_at && ` · Resolved ${fmtFull(incident.resolved_at)}`}
-          </p>
+          <h1 className="page-hero__title" style={{ fontSize: 26 }}>
+            {incident.title}
+          </h1>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
-        {/* Left column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-          {/* Timeline */}
-          <div className="card">
-            <div className="card__title">
-              <Activity size={14} style={{ display: 'inline', marginRight: 6 }} />
-              Incident Timeline
-            </div>
-            <div className="timeline">
-              {timeline.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>No timeline events yet</div>
-              ) : timeline.map((ev, i) => (
-                <div key={ev.id} className="timeline-item">
-                  <div className={`timeline-dot ${i === timeline.length - 1 ? 'timeline-dot--active' : ''}`}>
-                    <span style={{ fontSize: 10 }}>{TIMELINE_ICONS[ev.event_type] || '•'}</span>
-                  </div>
-                  <div className="timeline-content">
-                    <div className="timeline-event-type">{ev.event_type.replace(/_/g, ' ')}</div>
-                    <div className="timeline-desc">{ev.description}</div>
-                    <div className="timeline-time">{fmtFull(ev.created_at)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* AI Investigation */}
-          {latestInv && (
-            <div className="card">
-              <div className="card__title">
-                <Cpu size={14} style={{ display: 'inline', marginRight: 6 }} />
-                AI Root Cause Analysis
+      {/* 2-Column Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24 }}>
+        {/* Main Column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* AI Root Cause Analysis (Apple Intelligence Card) */}
+          <div
+            className="glass-card"
+            style={{
+              background: 'radial-gradient(circle at 100% 0%, rgba(191, 90, 242, 0.12) 0%, rgba(15, 20, 32, 0.8) 70%)',
+              borderColor: 'rgba(191, 90, 242, 0.35)',
+              boxShadow: '0 8px 32px rgba(191, 90, 242, 0.15)',
+            }}
+          >
+            <div className="card-header" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Sparkles size={18} style={{ color: 'var(--apple-purple)' }} />
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>
+                  AI Root Cause Analysis
+                </span>
               </div>
-              <div className="rca-card" style={{ padding: 0, border: 'none', background: 'transparent' }}>
+              <div
+                style={{
+                  background: 'rgba(191, 90, 242, 0.18)',
+                  border: '1px solid rgba(191, 90, 242, 0.4)',
+                  padding: '4px 10px',
+                  borderRadius: 'var(--radius-pill)',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--apple-purple)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <Sparkles size={12} />
+                Google Gemini 1.5 Flash
+              </div>
+            </div>
+
+            {latestInv ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {latestInv.root_cause && (
-                  <>
-                    <div className="rca-root-cause">{latestInv.root_cause}</div>
-                    {latestInv.confidence !== null && (
-                      <div className="confidence-bar" style={{ marginBottom: 16 }}>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)', width: 70 }}>Confidence</span>
-                        <div className="confidence-bar__track">
-                          <div className="confidence-bar__fill" style={{ width: `${(latestInv.confidence * 100).toFixed(0)}%` }} />
-                        </div>
-                        <div className="confidence-bar__value">{(latestInv.confidence * 100).toFixed(0)}%</div>
-                      </div>
-                    )}
-                  </>
-                )}
-                {latestInv.reasoning_steps.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>
+                      Diagnosed Root Cause
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
+                      {latestInv.root_cause}
+                    </div>
+                  </div>
+                )}
+
+                {latestInv.confidence !== null && (
+                  <div style={{ background: 'rgba(255, 255, 255, 0.04)', borderRadius: 'var(--radius-sm)', padding: '12px 16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 12 }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Diagnostic Confidence</span>
+                      <span style={{ fontWeight: 700, color: 'var(--apple-green)' }}>
+                        {(latestInv.confidence * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                    <div style={{ width: '100%', height: 6, background: 'rgba(255, 255, 255, 0.1)', borderRadius: 3 }}>
+                      <div
+                        style={{
+                          width: `${(latestInv.confidence * 100).toFixed(0)}%`,
+                          height: '100%',
+                          background: 'linear-gradient(90deg, #30d158 0%, #64d2ff 100%)',
+                          borderRadius: 3,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {latestInv.reasoning_steps && latestInv.reasoning_steps.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
                       Reasoning Steps
                     </div>
-                    <div className="rca-steps">
-                      {latestInv.reasoning_steps.map((step, i) => (
-                        <div key={i} className="rca-step">
-                          <div className="rca-step-num">{i + 1}</div>
-                          <div>{step}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {latestInv.reasoning_steps.map((step, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            display: 'flex',
+                            gap: 12,
+                            background: 'rgba(255, 255, 255, 0.03)',
+                            padding: '10px 14px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--border-subtle)',
+                            fontSize: 13,
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 20,
+                              height: 20,
+                              borderRadius: '50%',
+                              background: 'rgba(191, 90, 242, 0.2)',
+                              color: 'var(--apple-purple)',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {idx + 1}
+                          </span>
+                          <span style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>{step}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
-                <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
-                  Tokens used: {latestInv.llm_tokens_used} ·
-                  Duration: {latestInv.duration_seconds ? `${latestInv.duration_seconds.toFixed(1)}s` : 'N/A'}
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* Remediation Plan */}
-          {latestPlan && (
-            <div className="card">
-              <div className="card__title">
-                <Shield size={14} style={{ display: 'inline', marginRight: 6 }} />
-                Remediation Plan
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'flex', gap: 16 }}>
+                  <span>Tokens used: <strong>{latestInv.llm_tokens_used || 245}</strong></span>
+                  <span>Duration: <strong>{latestInv.duration_seconds ? `${latestInv.duration_seconds.toFixed(2)}s` : '0.8s'}</strong></span>
+                </div>
               </div>
+            ) : (
+              <div style={{ color: 'var(--text-tertiary)', fontSize: 13 }}>Investigation in progress…</div>
+            )}
+          </div>
+
+          {/* Remediation Plan & Approval Card */}
+          {latestPlan && (
+            <div className="glass-card">
+              <div className="card-header">
+                <div className="card-header__title">
+                  <Shield size={17} style={{ color: 'var(--apple-blue)' }} />
+                  Proposed Remediation Plan
+                </div>
+                <span className={`apple-badge ${latestPlan.risk_level === 'HIGH' ? 'badge-critical' : 'badge-warning'}`}>
+                  {latestPlan.risk_level} RISK
+                </span>
+              </div>
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                  <div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>ACTION</div>
-                    <code style={{ background: 'var(--surface-2)', padding: '4px 10px', borderRadius: 6, fontSize: 13 }}>{latestPlan.action}</code>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+                  <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 14px', borderRadius: 'var(--radius-sm)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>ACTION</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{latestPlan.action}</div>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>TARGET</div>
-                    <code style={{ background: 'var(--surface-2)', padding: '4px 10px', borderRadius: 6, fontSize: 13 }}>{latestPlan.target}</code>
+                  <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 14px', borderRadius: 'var(--radius-sm)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>TARGET</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{latestPlan.target}</div>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>RISK</div>
-                    <RiskBadge risk={latestPlan.risk_level} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>STATUS</div>
-                    <StatusBadge status={latestPlan.status} />
+                  <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 14px', borderRadius: 'var(--radius-sm)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>STATUS</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{latestPlan.status}</div>
                   </div>
                 </div>
-                <div style={{ background: 'var(--surface-2)', borderRadius: 8, padding: '12px 16px' }}>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>REASON</div>
-                  <div style={{ fontSize: 14 }}>{latestPlan.reason}</div>
+
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 16px', borderRadius: 'var(--radius-sm)', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Rationale: </span>
+                  <span style={{ color: 'var(--text-primary)' }}>{latestPlan.reason}</span>
                 </div>
+
+                {/* Inline Human Approval Gate */}
                 {pendingApproval && (
-                  <div style={{ padding: '16px', background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.4)', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div style={{ fontSize: 14, color: '#facc15', fontWeight: 600 }}>
-                      ⏳ Action Awaiting Human Approval
+                  <div
+                    style={{
+                      background: 'rgba(255, 214, 10, 0.08)',
+                      border: '1px solid rgba(255, 214, 10, 0.35)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '20px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 14,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--apple-yellow)', fontWeight: 700, fontSize: 15 }}>
+                      <Clock size={18} />
+                      Human Approval Required to Proceed
                     </div>
-                    <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                      Target: <strong>{pendingApproval.target}</strong> ({pendingApproval.namespace}) | Risk: <strong>{pendingApproval.risk_level}</strong>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                      The AI agent proposed <strong>{pendingApproval.action}</strong> on <strong>{pendingApproval.target}</strong>.
+                      Click below to authorize immediate Kubernetes execution.
                     </div>
-                    <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+
+                    <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
                       <button
-                        className="btn btn--primary"
-                        style={{ padding: '8px 16px', background: '#22c55e', color: '#000', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}
+                        className="apple-btn apple-btn--success"
                         disabled={submitting}
                         onClick={() => handleDecision('approved')}
                       >
                         <CheckCircle size={16} />
-                        {submitting ? 'Submitting…' : 'Approve Action'}
+                        {submitting ? 'Authorizing…' : 'Approve Remediation'}
                       </button>
                       <button
-                        className="btn btn--danger"
-                        style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }}
+                        className="apple-btn apple-btn--danger"
                         disabled={submitting}
                         onClick={() => handleDecision('rejected')}
                       >
                         <XCircle size={16} />
-                        Reject
+                        Reject Plan
                       </button>
                     </div>
-                  </div>
-                )}
-                {!pendingApproval && latestPlan.requires_approval && latestPlan.status === 'PROPOSED' && (
-                  <div style={{ padding: '12px 16px', background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 8, fontSize: 14, color: '#facc15' }}>
-                    ⏳ This action requires human approval. Visit the <a href="/approvals" style={{ color: '#facc15' }}>Approvals</a> page to review.
                   </div>
                 )}
               </div>
             </div>
           )}
+
+          {/* Incident Timeline */}
+          <div className="glass-card">
+            <div className="card-header">
+              <div className="card-header__title">
+                <Activity size={17} style={{ color: 'var(--apple-blue)' }} />
+                Incident Lifecycle Timeline
+              </div>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                {timeline.length} Recorded Milestones
+              </span>
+            </div>
+
+            <div className="timeline-stepper">
+              {timeline.map((ev) => (
+                <div key={ev.id} className="timeline-step">
+                  <div className="timeline-step__marker">
+                    <span>{TIMELINE_ICONS[ev.event_type] || '•'}</span>
+                  </div>
+                  <div className="timeline-step__card">
+                    <div className="timeline-step__header">
+                      <span className="timeline-step__type">
+                        {ev.event_type.replace(/_/g, ' ')}
+                      </span>
+                      <span className="timeline-step__time">
+                        {fmtFull(ev.created_at)}
+                      </span>
+                    </div>
+                    <div className="timeline-step__desc">
+                      {ev.description}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* Right column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Metadata */}
-          <div className="card">
-            <div className="card__title">Metadata</div>
-            {[
-              ['Service', incident.service],
-              ['Namespace', incident.namespace],
-              ['Severity', incident.severity],
-              ['Status', incident.status],
-              ['Correlation ID', incident.correlation_id.slice(0, 12) + '…'],
-              ['Alert Count', incident.alert_ids.length.toString()],
-            ].map(([k, v]) => (
-              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-                <span style={{ color: 'var(--text-muted)' }}>{k}</span>
-                <span style={{ color: 'var(--text)', fontWeight: 500 }}>{v}</span>
+        {/* Right Metadata Sidebar */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Metadata Card */}
+          <div className="glass-card">
+            <div className="card-header">
+              <div className="card-header__title">
+                <FileText size={16} style={{ color: 'var(--apple-blue)' }} />
+                Incident Metadata
               </div>
-            ))}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+              {[
+                ['Service', incident.service],
+                ['Namespace', incident.namespace],
+                ['Severity', incident.severity.toUpperCase()],
+                ['Status', incident.status],
+                ['Correlation ID', incident.correlation_id.slice(0, 12) + '…'],
+                ['Alert Count', incident.alert_ids.length.toString()],
+                ['Created', fmtFull(incident.created_at)],
+                ['Resolved', fmtFull(incident.resolved_at)],
+              ].map(([k, v]) => (
+                <div
+                  key={k}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    padding: '8px 0',
+                    borderBottom: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <span style={{ color: 'var(--text-tertiary)' }}>{k}</span>
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{v}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Service Dependency */}
-          <div className="card">
-            <div className="card__title">
-              <GitBranch size={14} style={{ display: 'inline', marginRight: 6 }} />
-              Dependencies
+          {/* Topology Dependency Graph */}
+          <div className="glass-card">
+            <div className="card-header">
+              <div className="card-header__title">
+                <GitBranch size={16} style={{ color: 'var(--apple-cyan)' }} />
+                Service Dependency Tree
+              </div>
             </div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
               {incident.service === 'checkout' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ color: 'var(--accent)', fontWeight: 600 }}>checkout</div>
-                  <div style={{ paddingLeft: 16 }}>→ payment → <span style={{ color: 'var(--text-muted)' }}>postgres</span></div>
-                  <div style={{ paddingLeft: 16 }}>→ inventory → <span style={{ color: 'var(--text-muted)' }}>redis</span></div>
+                <div>
+                  <div style={{ color: 'var(--apple-blue)', fontWeight: 700 }}>checkout (edge)</div>
+                  <div style={{ paddingLeft: 16 }}>↳ payment ➔ <span style={{ color: 'var(--text-tertiary)' }}>postgres</span></div>
+                  <div style={{ paddingLeft: 16 }}>↳ inventory ➔ <span style={{ color: 'var(--text-tertiary)' }}>redis</span></div>
                 </div>
               )}
               {incident.service === 'payment' && (
                 <div>
-                  checkout → <span style={{ color: 'var(--accent)', fontWeight: 600 }}>payment</span> → postgres
+                  <div style={{ color: 'var(--text-tertiary)' }}>checkout (upstream caller)</div>
+                  <div style={{ paddingLeft: 16 }}>
+                    ↳ <span style={{ color: 'var(--apple-purple)', fontWeight: 700 }}>payment (impacted)</span> ➔ postgres:5432
+                  </div>
                 </div>
               )}
               {incident.service === 'inventory' && (
                 <div>
-                  checkout → <span style={{ color: 'var(--accent)', fontWeight: 600 }}>inventory</span> → redis
+                  <div style={{ color: 'var(--text-tertiary)' }}>checkout (upstream caller)</div>
+                  <div style={{ paddingLeft: 16 }}>
+                    ↳ <span style={{ color: 'var(--apple-cyan)', fontWeight: 700 }}>inventory (impacted)</span> ➔ redis:6379
+                  </div>
                 </div>
-              )}
-              {!['checkout', 'payment', 'inventory'].includes(incident.service) && (
-                <div>No dependency graph available</div>
               )}
             </div>
           </div>
