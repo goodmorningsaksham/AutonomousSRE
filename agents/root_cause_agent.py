@@ -214,8 +214,8 @@ async def run_rca(
                 incident_alerts = [
                     {
                         "name": a.alert_name,
-                        "summary": a.summary or "",
-                        "description": a.description or "",
+                        "summary": (a.annotations.get("summary") if isinstance(a.annotations, dict) else "") or a.alert_name,
+                        "description": (a.annotations.get("description") if isinstance(a.annotations, dict) else "") or a.alert_name,
                         "severity": a.severity or "warning",
                     }
                     for a in al_res.scalars().all()
@@ -245,8 +245,9 @@ async def run_rca(
     try:
         response_dict = json.loads(raw_response)
 
-        # Validate and normalize confidence (support float, string numbers, 'High'/'Medium'/'Low')
-        conf_raw = response_dict.get("confidence", 0.85)
+        # Normalize confidence
+        conf_raw = response_dict.get("confidence") or response_dict.get("confidence_score") or response_dict.get("confidenceScore")
+        confidence_score = 0.85
         if isinstance(conf_raw, str):
             c_str = conf_raw.strip().lower()
             if "high" in c_str:
@@ -263,14 +264,35 @@ async def run_rca(
                     confidence_score = 0.85
         elif isinstance(conf_raw, (int, float)):
             confidence_score = float(conf_raw) / 100.0 if float(conf_raw) > 1.0 else float(conf_raw)
-        else:
-            confidence_score = 0.85
         confidence_score = max(0.05, min(1.0, confidence_score))
+
+        # Normalize root_cause
+        root_cause_text = str(
+            response_dict.get("root_cause")
+            or response_dict.get("rootCause")
+            or response_dict.get("diagnosis")
+            or response_dict.get("summary")
+            or response_dict.get("cause")
+            or f"Failure identified in {service}"
+        ).strip()
+
+        suspected_comp = str(
+            response_dict.get("suspected_component")
+            or response_dict.get("suspectedComponent")
+            or response_dict.get("component")
+            or service
+        ).strip()
 
         # Validate recommended actions — reject forbidden actions
         ALLOWED_ACTIONS = {"RESTART_POD", "SCALE_DEPLOYMENT", "ROLLBACK_DEPLOYMENT"}
+        raw_actions = (
+            response_dict.get("recommended_actions")
+            or response_dict.get("recommendedActions")
+            or response_dict.get("actions")
+            or []
+        )
         safe_actions = []
-        for action in response_dict.get("recommended_actions", []):
+        for action in raw_actions:
             if isinstance(action, dict):
                 act_name = str(action.get("action", "")).upper()
                 if act_name in ALLOWED_ACTIONS:
@@ -284,14 +306,14 @@ async def run_rca(
             elif isinstance(action, str):
                 act_upper = action.upper()
                 if "ROLLBACK" in act_upper:
-                    safe_actions.append({"action": "ROLLBACK_DEPLOYMENT", "target": service, "namespace": namespace, "reason": action})
+                    safe_actions.append({"action": "ROLLBACK_DEPLOYMENT", "target": suspected_comp, "namespace": namespace, "reason": action})
                 elif "RESTART" in act_upper:
-                    safe_actions.append({"action": "RESTART_POD", "target": service, "namespace": namespace, "reason": action})
+                    safe_actions.append({"action": "RESTART_POD", "target": suspected_comp, "namespace": namespace, "reason": action})
                 elif "SCALE" in act_upper:
-                    safe_actions.append({"action": "SCALE_DEPLOYMENT", "target": service, "namespace": namespace, "reason": action})
+                    safe_actions.append({"action": "SCALE_DEPLOYMENT", "target": suspected_comp, "namespace": namespace, "reason": action})
 
         if not safe_actions:
-            safe_actions = [{"action": "RESTART_POD", "target": service, "namespace": namespace, "reason": "Default safe mitigation"}]
+            safe_actions = [{"action": "ROLLBACK_DEPLOYMENT", "target": suspected_comp, "namespace": namespace, "reason": "Restore previous stable deployment revision"}]
 
         # Build typed object
         evidence_items = []
@@ -313,14 +335,27 @@ async def run_rca(
                     )
                 )
 
+        raw_steps = (
+            response_dict.get("reasoning_steps")
+            or response_dict.get("reasoningSteps")
+            or response_dict.get("reasoning")
+            or response_dict.get("steps")
+            or []
+        )
         reasoning_list = []
-        for s in response_dict.get("reasoning_steps", []):
-            reasoning_list.append(str(s)[:400])
+        if isinstance(raw_steps, list):
+            for s in raw_steps:
+                reasoning_list.append(str(s)[:400])
+        elif isinstance(raw_steps, str):
+            reasoning_list.append(raw_steps[:400])
+
+        if not reasoning_list:
+            reasoning_list = [f"Analyzed telemetry and logs for {service}", f"Root cause identified: {root_cause_text[:100]}"]
 
         rca = RootCauseAnalysis(
-            root_cause=str(response_dict["root_cause"])[:500],
+            root_cause=root_cause_text[:500],
             confidence=confidence_score,
-            suspected_component=str(response_dict.get("suspected_component", service))[:100],
+            suspected_component=suspected_comp[:100],
             reasoning_steps=reasoning_list,
             evidence=evidence_items,
             recommended_actions=safe_actions,

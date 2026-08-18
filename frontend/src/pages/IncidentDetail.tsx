@@ -499,7 +499,7 @@ export default function IncidentDetail() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <a
-                href={`http://localhost:3000/d/service-overview?var-service=${incident.service}`}
+                href={`http://localhost:3000/explore?schemaVersion=1&panes=%7B%22v0e%22%3A%7B%22datasource%22%3A%22PBFA97CFB590B2093%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22http_requests_total%7Bservice%3D%5C%22${incident.service}%5C%22%7D%22%7D%5D%7D%7D`}
                 target="_blank"
                 rel="noreferrer"
                 style={{
@@ -518,15 +518,15 @@ export default function IncidentDetail() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <Flame size={15} style={{ color: '#ff9f0a' }} />
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 12.5 }}>Grafana Dashboard</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Service health & RED metrics</div>
+                    <div style={{ fontWeight: 600, fontSize: 12.5 }}>Grafana Explore</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Live Prometheus metrics</div>
                   </div>
                 </div>
                 <ExternalLink size={13} style={{ color: 'var(--text-tertiary)' }} />
               </a>
 
               <a
-                href={`http://localhost:9090/graph?g0.expr=rate(http_requests_total%7Bservice%3D%22${incident.service}%22%7D%5B5m%5D)&g0.tab=0`}
+                href={`http://localhost:9090/graph?g0.expr=http_requests_total%7Bservice%3D%22${incident.service}%22%7D&g0.tab=0`}
                 target="_blank"
                 rel="noreferrer"
                 style={{
@@ -545,15 +545,15 @@ export default function IncidentDetail() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <Activity size={15} style={{ color: 'var(--apple-red)' }} />
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 12.5 }}>Prometheus Metrics</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Query error rate & latency</div>
+                    <div style={{ fontWeight: 600, fontSize: 12.5 }}>Prometheus Native Graph</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Rate & query explorer (:9090)</div>
                   </div>
                 </div>
                 <ExternalLink size={13} style={{ color: 'var(--text-tertiary)' }} />
               </a>
 
               <a
-                href={`http://localhost:3000/explore?left=%7B%22datasource%22%3A%22Loki%22%2C%22queries%22%3A%5B%7B%22expr%22%3A%22%7Bapp%3D%5C%22${incident.service}%5C%22%7D%22%7D%5D%7D`}
+                href={`http://localhost:3000/explore?schemaVersion=1&panes=%7B%22v0e%22%3A%7B%22datasource%22%3A%22P8E80F9AEF21F6940%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22${incident.service}%5C%22%7D%22%7D%5D%7D%7D`}
                 target="_blank"
                 rel="noreferrer"
                 style={{
@@ -573,14 +573,14 @@ export default function IncidentDetail() {
                   <Terminal size={15} style={{ color: 'var(--apple-blue)' }} />
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 12.5 }}>Loki Log Stream</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Live container stdout & traces</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Live container stdout & stderr</div>
                   </div>
                 </div>
                 <ExternalLink size={13} style={{ color: 'var(--text-tertiary)' }} />
               </a>
 
               <a
-                href={`http://localhost:3000/explore?left=%7B%22datasource%22%3A%22Tempo%22%2C%22queries%22%3A%5B%7B%22query%22%3A%22%7Bservice.name%3D%5C%22${incident.service}%5C%22%7D%22%7D%5D%7D`}
+                href={`http://localhost:3000/explore?schemaVersion=1&panes=%7B%22v0e%22%3A%7B%22datasource%22%3A%22P214B5B846CF3925F%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22search%22%7D%5D%7D%7D`}
                 target="_blank"
                 rel="noreferrer"
                 style={{
@@ -599,8 +599,8 @@ export default function IncidentDetail() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <Layers size={15} style={{ color: 'var(--apple-purple)' }} />
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 12.5 }}>Tempo Distributed Traces</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Waterfall latency spans</div>
+                    <div style={{ fontWeight: 600, fontSize: 12.5 }}>Tempo Traces Explorer</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Distributed trace search</div>
                   </div>
                 </div>
                 <ExternalLink size={13} style={{ color: 'var(--text-tertiary)' }} />
