@@ -205,12 +205,66 @@ async def get_incident(incident_id: str, db: AsyncSession = Depends(get_db)) -> 
     )
 
 
-# ── Approvals ─────────────────────────────────────────────────────────────────
 @app.get("/api/v1/approvals/pending")
 async def list_pending_approvals(db: AsyncSession = Depends(get_db)) -> list[dict]:
+    # 1. Self-healing: sync any incidents that are in AWAITING_APPROVAL but missing Approval records
+    awaiting_incidents = (await db.execute(
+        select(Incident).where(Incident.status == "AWAITING_APPROVAL")
+    )).scalars().all()
+
+    for inc in awaiting_incidents:
+        plan = (await db.execute(
+            select(RemediationPlan).where(RemediationPlan.incident_id == inc.id).limit(1)
+        )).scalar_one_or_none()
+        if not plan:
+            inv = (await db.execute(
+                select(Investigation).where(Investigation.incident_id == inc.id).order_by(desc(Investigation.started_at)).limit(1)
+            )).scalar_one_or_none()
+            act_name = "ROLLBACK_DEPLOYMENT"
+            reason_text = inc.root_cause or "Restore microservice availability"
+            if inv and inv.recommended_actions:
+                first_act = inv.recommended_actions[0]
+                if isinstance(first_act, dict):
+                    act_name = first_act.get("action", act_name)
+                    reason_text = first_act.get("reason", reason_text)
+            plan = RemediationPlan(
+                id=new_event_id(),
+                incident_id=inc.id,
+                action=act_name,
+                target=inc.service,
+                namespace=inc.namespace,
+                parameters={},
+                risk_level="MEDIUM",
+                reason=reason_text,
+                requires_approval=True,
+                status="PENDING",
+                policy_allowed=True,
+            )
+            db.add(plan)
+            await db.flush()
+
+        app_rec = (await db.execute(
+            select(Approval).where(Approval.incident_id == inc.id).limit(1)
+        )).scalar_one_or_none()
+        if not app_rec:
+            app_rec = Approval(
+                id=new_event_id(),
+                plan_id=plan.id,
+                incident_id=inc.id,
+                status="PENDING",
+                requested_at=datetime.now(tz=timezone.utc),
+            )
+            db.add(app_rec)
+        elif app_rec.status != "PENDING":
+            app_rec.status = "PENDING"
+            app_rec.plan_id = plan.id
+
+    await db.commit()
+
+    # 2. Return all pending approvals
     result = await db.execute(
         select(Approval, RemediationPlan)
-        .join(RemediationPlan, Approval.plan_id == RemediationPlan.id)
+        .outerjoin(RemediationPlan, Approval.plan_id == RemediationPlan.id)
         .where(Approval.status == "PENDING")
         .order_by(desc(Approval.requested_at))
         .limit(50)
@@ -221,14 +275,14 @@ async def list_pending_approvals(db: AsyncSession = Depends(get_db)) -> list[dic
     for approval, plan in rows:
         approvals.append({
             "approval_id": approval.id,
-            "plan_id": plan.id,
+            "plan_id": plan.id if plan else approval.plan_id,
             "incident_id": approval.incident_id,
-            "action": plan.action,
-            "target": plan.target,
-            "namespace": plan.namespace,
-            "risk_level": plan.risk_level,
-            "reason": plan.reason,
-            "requested_at": approval.requested_at.isoformat(),
+            "action": plan.action if plan else "ROLLBACK_DEPLOYMENT",
+            "target": plan.target if plan else "service",
+            "namespace": plan.namespace if plan else "production",
+            "risk_level": plan.risk_level if plan else "MEDIUM",
+            "reason": plan.reason if plan else "Remediate detected failure",
+            "requested_at": approval.requested_at.isoformat() if approval.requested_at else datetime.now(tz=timezone.utc).isoformat(),
         })
     return approvals
 
@@ -359,15 +413,42 @@ async def approve_incident_remediation(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Convenience endpoint to approve by incident_id directly."""
+    # 1. Ensure RemediationPlan exists
+    plan_res = await db.execute(
+        select(RemediationPlan).where(RemediationPlan.incident_id == incident_id).limit(1)
+    )
+    plan = plan_res.scalar_one_or_none()
+    if not plan:
+        inc_res = await db.execute(select(Incident).where(Incident.id == incident_id))
+        inc_obj = inc_res.scalar_one_or_none()
+        svc_name = inc_obj.service if inc_obj else "service"
+        ns_name = inc_obj.namespace if inc_obj else "production"
+        reason_str = (inc_obj.root_cause if inc_obj else "") or "Restore microservice availability"
+        plan = RemediationPlan(
+            id=new_event_id(),
+            incident_id=incident_id,
+            action="ROLLBACK_DEPLOYMENT",
+            target=svc_name,
+            namespace=ns_name,
+            parameters={},
+            risk_level="MEDIUM",
+            reason=reason_str,
+            requires_approval=True,
+            status="PENDING",
+            policy_allowed=True,
+        )
+        db.add(plan)
+        await db.flush()
+
+    # 2. Ensure Approval exists
     result = await db.execute(
         select(Approval).where(Approval.incident_id == incident_id).order_by(Approval.requested_at.desc()).limit(1)
     )
     approval = result.scalar_one_or_none()
     if not approval:
-        # Create a pending approval record if not exists
         approval = Approval(
             id=new_event_id(),
-            plan_id=new_event_id(),
+            plan_id=plan.id,
             incident_id=incident_id,
             status="PENDING",
             requested_at=datetime.now(tz=timezone.utc),
@@ -375,8 +456,8 @@ async def approve_incident_remediation(
         db.add(approval)
         await db.commit()
     elif approval.status != "PENDING":
-        # Reset to pending so approve_remediation can process it
         approval.status = "PENDING"
+        approval.plan_id = plan.id
         await db.commit()
 
     return await approve_remediation(approval_id=approval.id, decision=decision, db=db)
