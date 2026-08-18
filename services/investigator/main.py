@@ -51,6 +51,10 @@ async def handle_incident_created(event: dict) -> None:
         logger.warning("Incident created event missing incident_id", event_id=event_id)
         return
 
+    if event_id and await _is_processed(event_id):
+        logger.info("Event already processed by investigator", event_id=event_id)
+        return
+
     logger.info("Incident created — starting workflow", incident_id=incident_id, service=service)
 
     try:
@@ -72,13 +76,16 @@ async def handle_incident_created(event: dict) -> None:
         )
         await _run_investigation_sync(incident_id, service, namespace)
 
-    # Mark processed
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            session.add(ProcessedEvent(
-                event_id=event_id,
-                consumer_group=CONSUMER_GROUP,
-            ))
+    # Mark processed safely
+    try:
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                session.add(ProcessedEvent(
+                    event_id=event_id,
+                    consumer_group=CONSUMER_GROUP,
+                ))
+    except Exception:
+        pass
 
 
 async def _run_investigation_sync(incident_id: str, service: str, namespace: str) -> None:

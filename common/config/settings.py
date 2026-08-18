@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o"
     gemini_api_key: str = ""
     google_api_key: str = ""
-    gemini_model: str = "gemini-1.5-flash"
+    gemini_model: str = "gemini-2.5-flash"
     llm_max_tokens: int = 4096
     llm_temperature: float = 0.1
 

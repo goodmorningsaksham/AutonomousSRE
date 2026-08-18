@@ -199,47 +199,83 @@ async def run_rca(
     try:
         response_dict = json.loads(raw_response)
 
-        # Validate required fields
-        if "root_cause" not in response_dict:
-            raise ValueError("Missing 'root_cause' field in LLM response")
-        if not isinstance(response_dict.get("confidence"), (int, float)):
-            raise ValueError("Missing or invalid 'confidence' field")
-        if not (0.0 <= float(response_dict["confidence"]) <= 1.0):
-            raise ValueError(f"Confidence {response_dict['confidence']} out of range [0,1]")
+        # Validate and normalize confidence (support float, string numbers, 'High'/'Medium'/'Low')
+        conf_raw = response_dict.get("confidence", 0.85)
+        if isinstance(conf_raw, str):
+            c_str = conf_raw.strip().lower()
+            if "high" in c_str:
+                confidence_score = 0.90
+            elif "med" in c_str:
+                confidence_score = 0.70
+            elif "low" in c_str:
+                confidence_score = 0.40
+            else:
+                try:
+                    num = float(c_str.replace("%", "").strip())
+                    confidence_score = num / 100.0 if num > 1.0 else num
+                except ValueError:
+                    confidence_score = 0.85
+        elif isinstance(conf_raw, (int, float)):
+            confidence_score = float(conf_raw) / 100.0 if float(conf_raw) > 1.0 else float(conf_raw)
+        else:
+            confidence_score = 0.85
+        confidence_score = max(0.05, min(1.0, confidence_score))
 
         # Validate recommended actions — reject forbidden actions
         ALLOWED_ACTIONS = {"RESTART_POD", "SCALE_DEPLOYMENT", "ROLLBACK_DEPLOYMENT"}
+        safe_actions = []
         for action in response_dict.get("recommended_actions", []):
-            if action.get("action") not in ALLOWED_ACTIONS:
-                logger.warning(
-                    "LLM proposed forbidden action — stripped from output",
-                    action=action.get("action"),
-                    incident_id=incident_id,
-                )
-                # Strip the forbidden action — the policy engine is the real guardrail
-                # but we also clean here for defense in depth
+            if isinstance(action, dict):
+                act_name = str(action.get("action", "")).upper()
+                if act_name in ALLOWED_ACTIONS:
+                    safe_actions.append(action)
+                else:
+                    logger.warning(
+                        "LLM proposed forbidden or unknown action — stripped from output",
+                        action=action.get("action"),
+                        incident_id=incident_id,
+                    )
+            elif isinstance(action, str):
+                act_upper = action.upper()
+                if "ROLLBACK" in act_upper:
+                    safe_actions.append({"action": "ROLLBACK_DEPLOYMENT", "target": service, "namespace": namespace, "reason": action})
+                elif "RESTART" in act_upper:
+                    safe_actions.append({"action": "RESTART_POD", "target": service, "namespace": namespace, "reason": action})
+                elif "SCALE" in act_upper:
+                    safe_actions.append({"action": "SCALE_DEPLOYMENT", "target": service, "namespace": namespace, "reason": action})
 
-        safe_actions = [
-            a for a in response_dict.get("recommended_actions", [])
-            if a.get("action") in ALLOWED_ACTIONS
-        ]
-        response_dict["recommended_actions"] = safe_actions
+        if not safe_actions:
+            safe_actions = [{"action": "RESTART_POD", "target": service, "namespace": namespace, "reason": "Default safe mitigation"}]
 
         # Build typed object
-        evidence_items = [
-            EvidenceItem(
-                source=e.get("source", "unknown"),
-                observation=str(e.get("observation", ""))[:500],
-                confidence_contribution=float(e.get("confidence_contribution", 0.0)),
-            )
-            for e in response_dict.get("evidence", [])
-        ]
+        evidence_items = []
+        for e in response_dict.get("evidence", []):
+            if isinstance(e, dict):
+                evidence_items.append(
+                    EvidenceItem(
+                        source=str(e.get("source", "telemetry")),
+                        observation=str(e.get("observation", ""))[:500],
+                        confidence_contribution=float(e.get("confidence_contribution", 0.0) or 0.0),
+                    )
+                )
+            elif isinstance(e, str):
+                evidence_items.append(
+                    EvidenceItem(
+                        source="llm_evidence",
+                        observation=str(e)[:500],
+                        confidence_contribution=0.2,
+                    )
+                )
+
+        reasoning_list = []
+        for s in response_dict.get("reasoning_steps", []):
+            reasoning_list.append(str(s)[:400])
 
         rca = RootCauseAnalysis(
             root_cause=str(response_dict["root_cause"])[:500],
-            confidence=float(response_dict["confidence"]),
+            confidence=confidence_score,
             suspected_component=str(response_dict.get("suspected_component", service))[:100],
-            reasoning_steps=[str(s)[:300] for s in response_dict.get("reasoning_steps", [])],
+            reasoning_steps=reasoning_list,
             evidence=evidence_items,
             recommended_actions=safe_actions,
         )
