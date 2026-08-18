@@ -139,6 +139,36 @@ export default function IncidentDetail() {
   const latestInv = investigations[investigations.length - 1];
   const latestPlan = remediation_plans[remediation_plans.length - 1];
 
+  const suggestedAction = (latestInv?.recommended_actions && latestInv.recommended_actions.length > 0)
+    ? latestInv.recommended_actions[0]
+    : null;
+
+  const effectivePlan = latestPlan || (suggestedAction ? {
+    id: 'suggested-plan',
+    action: String(suggestedAction.action || 'ROLLBACK_DEPLOYMENT'),
+    target: String(suggestedAction.target || incident.service),
+    namespace: String(suggestedAction.namespace || incident.namespace),
+    parameters: {},
+    reason: String(suggestedAction.reason || latestInv?.root_cause || 'Remediate detected failure'),
+    risk_level: 'MEDIUM',
+    requires_approval: true,
+    status: incident.status === 'RESOLVED' ? 'EXECUTED' : 'PENDING',
+    policy_allowed: true,
+    proposed_at: incident.created_at,
+  } : (incident.status === 'AWAITING_APPROVAL' ? {
+    id: 'suggested-plan',
+    action: 'ROLLBACK_DEPLOYMENT',
+    target: incident.service,
+    namespace: incident.namespace,
+    parameters: {},
+    reason: latestInv?.root_cause || 'Restore microservice health',
+    risk_level: 'MEDIUM',
+    requires_approval: true,
+    status: 'PENDING',
+    policy_allowed: true,
+    proposed_at: incident.created_at,
+  } : null));
+
   return (
     <div>
       {/* Header Bar */}
@@ -230,13 +260,14 @@ export default function IncidentDetail() {
                         {(latestInv.confidence * 100).toFixed(0)}%
                       </span>
                     </div>
-                    <div style={{ width: '100%', height: 6, background: 'rgba(255, 255, 255, 0.1)', borderRadius: 3 }}>
+                    <div style={{ width: '100%', height: 6, background: 'rgba(255, 255, 255, 0.08)', borderRadius: 3 }}>
                       <div
                         style={{
                           width: `${(latestInv.confidence * 100).toFixed(0)}%`,
                           height: '100%',
-                          background: 'linear-gradient(90deg, #30d158 0%, #64d2ff 100%)',
+                          background: 'linear-gradient(90deg, var(--apple-blue), var(--apple-green))',
                           borderRadius: 3,
+                          transition: 'width 1s cubic-bezier(0.16, 1, 0.3, 1)',
                         }}
                       />
                     </div>
@@ -245,8 +276,8 @@ export default function IncidentDetail() {
 
                 {latestInv.reasoning_steps && latestInv.reasoning_steps.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                      Reasoning Steps
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>
+                      Diagnostic Reasoning Steps
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {latestInv.reasoning_steps.map((step, idx) => (
@@ -297,15 +328,15 @@ export default function IncidentDetail() {
           </div>
 
           {/* Remediation Plan & Approval Card */}
-          {latestPlan && (
+          {effectivePlan && (
             <div className="glass-card">
               <div className="card-header">
                 <div className="card-header__title">
                   <Shield size={17} style={{ color: 'var(--apple-blue)' }} />
                   Proposed Remediation Plan
                 </div>
-                <span className={`apple-badge ${latestPlan.risk_level === 'HIGH' ? 'badge-critical' : 'badge-warning'}`}>
-                  {latestPlan.risk_level} RISK
+                <span className={`apple-badge ${effectivePlan.risk_level === 'HIGH' ? 'badge-critical' : 'badge-warning'}`}>
+                  {effectivePlan.risk_level} RISK
                 </span>
               </div>
 
@@ -313,21 +344,21 @@ export default function IncidentDetail() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                   <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 14px', borderRadius: 'var(--radius-sm)' }}>
                     <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>ACTION</div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>{latestPlan.action}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--apple-blue)' }}>{effectivePlan.action}</div>
                   </div>
                   <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 14px', borderRadius: 'var(--radius-sm)' }}>
                     <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>TARGET</div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>{latestPlan.target}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{effectivePlan.target}</div>
                   </div>
                   <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '10px 14px', borderRadius: 'var(--radius-sm)' }}>
                     <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>STATUS</div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>{latestPlan.status}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{effectivePlan.status}</div>
                   </div>
                 </div>
 
                 <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px 16px', borderRadius: 'var(--radius-sm)', fontSize: 13 }}>
                   <span style={{ color: 'var(--text-tertiary)' }}>Rationale: </span>
-                  <span style={{ color: 'var(--text-primary)' }}>{latestPlan.reason}</span>
+                  <span style={{ color: 'var(--text-primary)' }}>{effectivePlan.reason}</span>
                 </div>
 
                 {/* Inline Human Approval Gate */}
@@ -348,8 +379,8 @@ export default function IncidentDetail() {
                       Human Approval Required to Proceed
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                      The AI agent proposed <strong>{pendingApproval?.action || latestPlan.action}</strong> on <strong>{pendingApproval?.target || latestPlan.target}</strong>.
-                      Click below to authorize immediate Kubernetes execution.
+                      The AI agent proposed <strong>{pendingApproval?.action || effectivePlan.action}</strong> on <strong>{pendingApproval?.target || effectivePlan.target}</strong>.
+                      Click below to authorize immediate execution.
                     </div>
 
                     <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>

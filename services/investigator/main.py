@@ -154,12 +154,28 @@ async def _run_investigation_sync(incident_id: str, service: str, namespace: str
                 ))
 
                 if plan:
+                    plan_record = PlanModel(
+                        id=plan.plan_id,
+                        incident_id=incident_id,
+                        action=plan.action.value,
+                        target=plan.target,
+                        namespace=plan.namespace,
+                        parameters=plan.parameters or {},
+                        risk_level=plan.risk_level.value,
+                        reason=plan.reason,
+                        requires_approval=True,
+                        status="PENDING",
+                        policy_allowed=True,
+                    )
+                    session.add(plan_record)
+
                     # Evaluate policy
                     policy_result = evaluate_policy(plan)
                     if policy_result.allowed and not policy_result.requires_human_approval:
                         # Auto-execute
                         exec_id = new_event_id()
                         exec_result = await execute_remediation(plan, exec_id)
+                        plan_record.status = "EXECUTED"
                         if incident:
                             incident.status = IncidentStatus.RESOLVED.value
                         session.add(IncidentEvent(
@@ -169,6 +185,13 @@ async def _run_investigation_sync(incident_id: str, service: str, namespace: str
                             details={"action": plan.action.value, "target": plan.target},
                         ))
                     elif policy_result.allowed and policy_result.requires_human_approval:
+                        session.add(Approval(
+                            id=new_event_id(),
+                            plan_id=plan.plan_id,
+                            incident_id=incident_id,
+                            status="PENDING",
+                            requested_at=datetime.now(tz=timezone.utc),
+                        ))
                         if incident:
                             incident.status = IncidentStatus.AWAITING_APPROVAL.value
                         session.add(IncidentEvent(
@@ -178,6 +201,14 @@ async def _run_investigation_sync(incident_id: str, service: str, namespace: str
                             details={"plan_id": plan.plan_id},
                         ))
                     else:
+                        if incident:
+                            incident.status = IncidentStatus.FAILED.value
+                        session.add(IncidentEvent(
+                            incident_id=incident_id,
+                            event_type="STATUS_CHANGED",
+                            description=f"Remediation policy rejected: {policy_result.rejection_reason}",
+                            details={},
+                        ))
                         session.add(IncidentEvent(
                             incident_id=incident_id,
                             event_type="POLICY_REJECTED",
