@@ -44,11 +44,18 @@ class Settings(BaseSettings):
         return f"{self.temporal_host}:{self.temporal_port}"
 
     # ── AI / LLM ──────────────────────────────────────────────────────────────
-    llm_provider: Literal["openai", "mock"] = "mock"
+    llm_provider: Literal["openai", "gemini", "mock"] = "mock"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
+    gemini_api_key: str = ""
+    google_api_key: str = ""
+    gemini_model: str = "gemini-1.5-flash"
     llm_max_tokens: int = 4096
     llm_temperature: float = 0.1
+
+    @property
+    def active_gemini_key(self) -> str:
+        return self.gemini_api_key or self.google_api_key
 
     # ── Kubernetes ────────────────────────────────────────────────────────────
     kubeconfig: str = ""

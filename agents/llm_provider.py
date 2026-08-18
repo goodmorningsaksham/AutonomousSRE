@@ -190,14 +190,79 @@ class MockLLMProvider(LLMProvider):
         return json.dumps(result), tokens_estimate, cost
 
 
+class GeminiLLMProvider(LLMProvider):
+    """Google Gemini provider using structured JSON output via REST API."""
+
+    def __init__(self) -> None:
+        self.api_key = settings.active_gemini_key
+        self.model = settings.gemini_model or "gemini-1.5-flash"
+        self.url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
+
+    async def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        response_schema: type | None = None,
+    ) -> tuple[str, int, float]:
+        import httpx
+        try:
+            payload = {
+                "system_instruction": {
+                    "parts": [{"text": system_prompt}]
+                },
+                "contents": [
+                    {
+                        "parts": [{"text": user_prompt}]
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": settings.llm_temperature,
+                    "maxOutputTokens": settings.llm_max_tokens,
+                    "responseMimeType": "application/json",
+                },
+            }
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(self.url, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+
+            candidates = data.get("candidates", [])
+            if not candidates:
+                raise ValueError(f"No candidates returned from Gemini API: {data}")
+
+            content_parts = candidates[0].get("content", {}).get("parts", [])
+            text = content_parts[0].get("text", "") if content_parts else ""
+
+            usage = data.get("usageMetadata", {})
+            tokens = usage.get("totalTokenCount", 0)
+            if not tokens:
+                tokens = len(user_prompt.split()) + len(text.split())
+
+            cost = (usage.get("promptTokenCount", 0) * 0.075 + usage.get("candidatesTokenCount", 0) * 0.30) / 1_000_000
+
+            logger.info("Gemini RCA generated", model=self.model, tokens=tokens)
+            return text, tokens, cost
+
+        except Exception as exc:
+            logger.error("Gemini API error", error=str(exc))
+            return json.dumps({"error": str(exc)}), 0, 0.0
+
+
 def get_llm_provider() -> LLMProvider:
     """Factory — returns configured provider based on settings."""
-    if settings.llm_provider == "openai" and settings.openai_api_key:
+    if settings.llm_provider == "gemini" and settings.active_gemini_key:
+        logger.info("Using Gemini LLM provider", model=settings.gemini_model)
+        return GeminiLLMProvider()
+    elif settings.llm_provider == "gemini" and not settings.active_gemini_key:
+        logger.warning("GEMINI_API_KEY / GOOGLE_API_KEY not set, falling back to mock LLM provider")
+        return MockLLMProvider()
+    elif settings.llm_provider == "openai" and settings.openai_api_key:
         logger.info("Using OpenAI LLM provider", model=settings.openai_model)
         return OpenAIProvider()
+    elif settings.llm_provider == "openai" and not settings.openai_api_key:
+        logger.warning("OPENAI_API_KEY not set, falling back to mock LLM provider")
+        return MockLLMProvider()
     else:
-        if settings.llm_provider == "openai" and not settings.openai_api_key:
-            logger.warning("OPENAI_API_KEY not set, falling back to mock LLM provider")
-        else:
-            logger.info("Using mock LLM provider")
+        logger.info("Using mock LLM provider")
         return MockLLMProvider()

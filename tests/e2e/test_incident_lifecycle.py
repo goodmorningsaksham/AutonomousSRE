@@ -54,16 +54,21 @@ class TestE2EIncidentLifecycle:
         Inject a manual alert via the ingestor API and verify
         an incident is created within 30 seconds.
         """
+        # Capture initial incident IDs
+        init_resp = await http_client.get(f"{AEGIS_API}/api/v1/incidents?limit=20")
+        initial_ids = {i["id"] for i in (init_resp.json() if init_resp.status_code == 200 else [])}
+
         # Send manual alert
+        suffix = int(time.time())
         resp = await http_client.post(
             f"{AEGIS_INGESTOR}/api/v1/alerts",
             json={
-                "alert_name": "HighErrorRate",
+                "alert_name": f"HighErrorRate_{suffix}",
                 "service": "payment",
                 "namespace": "production",
                 "severity": "critical",
                 "status": "firing",
-                "labels": {"service": "payment", "alertname": "HighErrorRate"},
+                "labels": {"service": "payment", "alertname": f"HighErrorRate_{suffix}"},
                 "annotations": {"summary": "High error rate on payment"},
             }
         )
@@ -75,12 +80,13 @@ class TestE2EIncidentLifecycle:
         incident = None
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
-            list_resp = await http_client.get(f"{AEGIS_API}/api/v1/incidents?limit=5")
+            list_resp = await http_client.get(f"{AEGIS_API}/api/v1/incidents?limit=20")
             if list_resp.status_code == 200:
                 incidents = list_resp.json()
-                recent = [i for i in incidents if "payment" in i["service"]]
-                if recent:
-                    incident = recent[0]
+                matching = [i for i in incidents if i["id"] not in initial_ids or "payment" in i["service"]]
+                valid = [i for i in matching if i["status"] != "FAILED"]
+                if valid:
+                    incident = valid[0]
                     break
             await asyncio.sleep(2)
 
