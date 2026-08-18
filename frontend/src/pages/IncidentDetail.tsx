@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Activity, Cpu, GitBranch, Shield } from 'lucide-react';
-import { fetchIncident, type IncidentDetail } from '../api';
+import { ArrowLeft, Activity, Cpu, GitBranch, Shield, CheckCircle, XCircle } from 'lucide-react';
+import { fetchIncident, fetchPendingApprovals, submitApproval, type IncidentDetail, type PendingApproval } from '../api';
 
 const StatusBadge = ({ status }: { status: string }) => (
   <span className={`badge badge--${status.toLowerCase()}`}>{status}</span>
@@ -32,19 +32,44 @@ export default function IncidentDetail() {
   const { id } = useParams<{ id: string }>();
   const [detail, setDetail] = useState<IncidentDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
+  const load = () => {
     if (!id) return;
-    const load = () =>
-      fetchIncident(id)
-        .then(setDetail)
-        .catch(() => {})
-        .finally(() => setLoading(false));
+    fetchIncident(id)
+      .then(setDetail)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+
+    fetchPendingApprovals()
+      .then(apps => {
+        const found = apps.find(a => a.incident_id === id);
+        setPendingApproval(found || null);
+      })
+      .catch(() => setPendingApproval(null));
+  };
+
+  useEffect(() => {
     load();
-    const interval = setInterval(load, 5000);
+    const interval = setInterval(load, 4000);
     return () => clearInterval(interval);
   }, [id]);
+
+  const handleDecision = async (decision: 'approved' | 'rejected') => {
+    if (!pendingApproval) return;
+    setSubmitting(true);
+    try {
+      await submitApproval(pendingApproval.approval_id, decision, 'sre-engineer@aegis.corp', `Decision: ${decision} from incident console`);
+      setPendingApproval(null);
+      load();
+    } catch {
+      alert(`Failed to submit ${decision} decision. Please try again.`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   if (loading) return <div className="loading">Loading incident…</div>;
   if (!detail) return <div className="empty"><div className="empty__text">Incident not found</div></div>;
@@ -179,7 +204,37 @@ export default function IncidentDetail() {
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>REASON</div>
                   <div style={{ fontSize: 14 }}>{latestPlan.reason}</div>
                 </div>
-                {latestPlan.requires_approval && latestPlan.status === 'PROPOSED' && (
+                {pendingApproval && (
+                  <div style={{ padding: '16px', background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.4)', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ fontSize: 14, color: '#facc15', fontWeight: 600 }}>
+                      ⏳ Action Awaiting Human Approval
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                      Target: <strong>{pendingApproval.target}</strong> ({pendingApproval.namespace}) | Risk: <strong>{pendingApproval.risk_level}</strong>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                      <button
+                        className="btn btn--primary"
+                        style={{ padding: '8px 16px', background: '#22c55e', color: '#000', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}
+                        disabled={submitting}
+                        onClick={() => handleDecision('approved')}
+                      >
+                        <CheckCircle size={16} />
+                        {submitting ? 'Submitting…' : 'Approve Action'}
+                      </button>
+                      <button
+                        className="btn btn--danger"
+                        style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }}
+                        disabled={submitting}
+                        onClick={() => handleDecision('rejected')}
+                      >
+                        <XCircle size={16} />
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {!pendingApproval && latestPlan.requires_approval && latestPlan.status === 'PROPOSED' && (
                   <div style={{ padding: '12px 16px', background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 8, fontSize: 14, color: '#facc15' }}>
                     ⏳ This action requires human approval. Visit the <a href="/approvals" style={{ color: '#facc15' }}>Approvals</a> page to review.
                   </div>
