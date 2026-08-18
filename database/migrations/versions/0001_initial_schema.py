@@ -236,7 +236,7 @@ def upgrade() -> None:
         sa.Column("target_service", sa.String(100), nullable=False),
         sa.Column("expected_root_cause", sa.Text, nullable=False),
         sa.Column("acceptable_remediations", sa.JSON, nullable=False, server_default="[]"),
-        sa.Column("metadata", sa.JSON, nullable=False, server_default="{}"),
+        sa.Column("scenario_metadata", sa.JSON, nullable=False, server_default="{}"),
     )
 
     # benchmark_results

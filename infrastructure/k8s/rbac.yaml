@@ -1,0 +1,102 @@
+# ── Service Account for Aegis Controller ─────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aegis-controller
+  namespace: aegis-system
+---
+# ── Least-Privilege Role for Target Namespaces ──────────────────────────────
+# Aegis requires permissions only to inspect telemetry/state and execute
+# permitted remediation actions (restart pods, scale deployments, rollback).
+# It does NOT have cluster-admin, and cannot delete namespaces or secrets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aegis-operator-role
+  namespace: production
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/status"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale", "replicasets"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["events", "services", "configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aegis-operator-binding
+  namespace: production
+subjects:
+  - kind: ServiceAccount
+    name: aegis-controller
+    namespace: aegis-system
+roleRef:
+  kind: Role
+  name: aegis-operator-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# ── Staging Role & Binding ───────────────────────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aegis-operator-role
+  namespace: staging
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/status"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale", "replicasets"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["events", "services", "configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aegis-operator-binding
+  namespace: staging
+subjects:
+  - kind: ServiceAccount
+    name: aegis-controller
+    namespace: aegis-system
+roleRef:
+  kind: Role
+  name: aegis-operator-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# ── Demo Role & Binding ──────────────────────────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aegis-operator-role
+  namespace: demo
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/status"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale", "replicasets"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["events", "services", "configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aegis-operator-binding
+  namespace: demo
+subjects:
+  - kind: ServiceAccount
+    name: aegis-controller
+    namespace: aegis-system
+roleRef:
+  kind: Role
+  name: aegis-operator-role
+  apiGroup: rbac.authorization.k8s.io

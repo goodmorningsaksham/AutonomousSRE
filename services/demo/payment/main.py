@@ -162,12 +162,21 @@ async def create_payment(amount: float = 100.0):
 
 
 # ── Failure Injection Endpoints ───────────────────────────────────────────────
+_cpu_burn_tasks: list[asyncio.Task] = []
+_memory_hog_buffer: list[bytearray] = []
+
+
+def _burn_cpu(duration_seconds: int = 30):
+    start = time.time()
+    while time.time() - start < duration_seconds:
+        _ = [x**2 for x in range(10000)]
+
+
 @app.post("/admin/inject/db-exhaustion")
 async def inject_db_exhaustion():
     """Hold all DB connections to simulate pool exhaustion."""
     global _held_connections
     if pool:
-        # Acquire connections without releasing
         for _ in range(MAX_POOL_SIZE):
             try:
                 conn = await pool.acquire(timeout=1.0)
@@ -196,16 +205,45 @@ async def inject_error_rate(rate: float = 0.5):
     return {"injected": "error_rate", "rate": rate}
 
 
+@app.post("/admin/inject/cpu-saturation")
+async def inject_cpu_saturation(duration_seconds: int = 30):
+    """Spin CPU intensive worker loops."""
+    loop = asyncio.get_running_loop()
+    task = loop.run_in_executor(None, _burn_cpu, duration_seconds)
+    logger.warning("FAILURE INJECTED: cpu saturation", duration=duration_seconds)
+    return {"injected": "cpu_saturation", "duration_seconds": duration_seconds}
+
+
+@app.post("/admin/inject/memory-pressure")
+async def inject_memory_pressure(megabytes: int = 256):
+    """Allocate memory buffers to create memory pressure."""
+    global _memory_hog_buffer
+    # Allocate in 10MB chunks
+    for _ in range(megabytes // 10):
+        _memory_hog_buffer.append(bytearray(10 * 1024 * 1024))
+    logger.warning("FAILURE INJECTED: memory pressure", allocated_mb=len(_memory_hog_buffer) * 10)
+    return {"injected": "memory_pressure", "allocated_mb": len(_memory_hog_buffer) * 10}
+
+
+@app.post("/admin/inject/pod-crash")
+async def inject_pod_crash():
+    """Trigger process termination to simulate container crash loop."""
+    logger.warning("FAILURE INJECTED: pod crash triggered")
+    asyncio.get_event_loop().call_later(0.1, lambda: os._exit(1))
+    return {"injected": "pod_crash", "action": "terminating"}
+
+
 @app.post("/admin/recover")
 async def recover():
     """Clear all failure injections."""
-    global _held_connections
+    global _held_connections, _memory_hog_buffer
     for conn in _held_connections:
         try:
             await pool.release(conn)
         except Exception:
             pass
     _held_connections.clear()
+    _memory_hog_buffer.clear()
     _failure_state["exhaust_pool"] = False
     _failure_state["add_latency_ms"] = 0
     _failure_state["error_rate"] = 0.0

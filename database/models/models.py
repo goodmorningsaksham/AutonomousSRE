@@ -307,7 +307,7 @@ class FailureScenario(Base):
     target_service: Mapped[str] = mapped_column(String(100), nullable=False)
     expected_root_cause: Mapped[str] = mapped_column(Text, nullable=False)
     acceptable_remediations: Mapped[list] = mapped_column(JSON, default=list)
-    metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    scenario_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
 class BenchmarkResult(Base):

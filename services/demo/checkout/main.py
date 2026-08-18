@@ -42,6 +42,13 @@ metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
 
 
+# ── Failure injection state ───────────────────────────────────────────────────
+_failure_state = {
+    "inject_timeout": False,
+    "add_latency_ms": 0,
+}
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "checkout"}
@@ -51,8 +58,14 @@ async def health():
 async def checkout(item_id: str = "item-1", quantity: int = 1, amount: float = 99.99):
     start = time.monotonic()
     with tracer.start_as_current_span("checkout"):
+        if _failure_state["add_latency_ms"] > 0:
+            import asyncio
+            await asyncio.sleep(_failure_state["add_latency_ms"] / 1000)
+
+        call_timeout = 0.5 if _failure_state["inject_timeout"] else 10.0
+
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=call_timeout) as client:
                 # Check inventory
                 inv_resp = await client.get(f"{INVENTORY_URL}/api/v1/inventory/{item_id}")
                 if inv_resp.status_code != 200:
@@ -79,6 +92,32 @@ async def checkout(item_id: str = "item-1", quantity: int = 1, amount: float = 9
             REQUEST_LATENCY.labels("POST", "/api/v1/checkout").observe(duration)
             logger.error("Checkout error", error=str(exc))
             raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ── Failure Injection Endpoints ───────────────────────────────────────────────
+@app.post("/admin/inject/dependency-timeout")
+async def inject_dependency_timeout():
+    """Artificially shorten client timeout to simulate upstream dependency timeouts."""
+    _failure_state["inject_timeout"] = True
+    logger.warning("FAILURE INJECTED: dependency timeout")
+    return {"injected": "dependency_timeout"}
+
+
+@app.post("/admin/inject/latency")
+async def inject_latency(ms: int = 2000):
+    """Add artificial latency to checkout service."""
+    _failure_state["add_latency_ms"] = ms
+    logger.warning("FAILURE INJECTED: latency", ms=ms)
+    return {"injected": "latency", "ms": ms}
+
+
+@app.post("/admin/recover")
+async def recover():
+    """Clear failure injections on checkout service."""
+    _failure_state["inject_timeout"] = False
+    _failure_state["add_latency_ms"] = 0
+    logger.info("Checkout failure injections cleared")
+    return {"recovered": True}
 
 
 if __name__ == "__main__":

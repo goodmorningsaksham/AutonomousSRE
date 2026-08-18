@@ -122,15 +122,20 @@ async def run_scenario(
 
     # ── 1. Inject failure ─────────────────────────────────────────────────────
     try:
-        if failure_type in ("db_exhaustion",):
+        if failure_type == "db_exhaustion":
             await client.post(f"{PAYMENT_URL}/admin/inject/db-exhaustion", timeout=5.0)
-        elif failure_type in ("bad_deployment", "dependency_failure"):
+        elif failure_type == "bad_deployment":
             await client.post(f"{PAYMENT_URL}/admin/inject/error-rate", params={"rate": 0.8}, timeout=5.0)
-        elif failure_type in ("latency_injection",):
+        elif failure_type == "dependency_failure":
+            await client.post(f"{CHECKOUT_URL}/admin/inject/dependency-timeout", timeout=5.0)
+        elif failure_type == "latency_injection":
             await client.post(f"{PAYMENT_URL}/admin/inject/latency", params={"ms": 2000}, timeout=5.0)
-        elif failure_type in ("redis_failure", "pod_crash", "cpu_saturation"):
-            # Simulate via error rate for now
-            await client.post(f"{PAYMENT_URL}/admin/inject/error-rate", params={"rate": 0.5}, timeout=5.0)
+        elif failure_type == "redis_failure":
+            await client.post(f"http://localhost:3003/admin/inject/redis-failure", timeout=5.0)
+        elif failure_type == "cpu_saturation":
+            await client.post(f"{PAYMENT_URL}/admin/inject/cpu-saturation", params={"duration_seconds": 30}, timeout=5.0)
+        elif failure_type in ("pod_crash", "memory_pressure"):
+            await client.post(f"{PAYMENT_URL}/admin/inject/memory-pressure", params={"megabytes": 256}, timeout=5.0)
     except Exception as e:
         notes = f"Injection failed: {e}"
         await _cleanup(client)
