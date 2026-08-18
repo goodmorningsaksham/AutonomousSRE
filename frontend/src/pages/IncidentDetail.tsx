@@ -499,7 +499,7 @@ export default function IncidentDetail() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <a
-                href={`http://localhost:3000/explore?schemaVersion=1&panes=%7B%22v0e%22%3A%7B%22datasource%22%3A%22PBFA97CFB590B2093%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22http_requests_total%7Bservice%3D%5C%22${incident.service}%5C%22%7D%22%7D%5D%7D%7D`}
+                href={`http://localhost:3000/explore?schemaVersion=1&panes=%7B%22v0e%22%3A%7B%22datasource%22%3A%22PBFA97CFB590B2093%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22up%7Bjob%3D%5C%22${incident.service}%5C%22%7D%22%7D%5D%7D%7D`}
                 target="_blank"
                 rel="noreferrer"
                 style={{
@@ -519,14 +519,14 @@ export default function IncidentDetail() {
                   <Flame size={15} style={{ color: '#ff9f0a' }} />
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 12.5 }}>Grafana Explore</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Live Prometheus metrics</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Live service health & metrics</div>
                   </div>
                 </div>
                 <ExternalLink size={13} style={{ color: 'var(--text-tertiary)' }} />
               </a>
 
               <a
-                href={`http://localhost:9090/graph?g0.expr=http_requests_total%7Bservice%3D%22${incident.service}%22%7D&g0.tab=0`}
+                href={`http://localhost:9090/graph?g0.expr=up%7Bjob%3D%22${incident.service}%22%7D&g0.tab=0`}
                 target="_blank"
                 rel="noreferrer"
                 style={{
@@ -546,7 +546,7 @@ export default function IncidentDetail() {
                   <Activity size={15} style={{ color: 'var(--apple-red)' }} />
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 12.5 }}>Prometheus Native Graph</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Rate & query explorer (:9090)</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Live target query (:9090)</div>
                   </div>
                 </div>
                 <ExternalLink size={13} style={{ color: 'var(--text-tertiary)' }} />
