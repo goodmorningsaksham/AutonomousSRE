@@ -1,0 +1,33 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'service', 'namespace']
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 1h
+  receiver: aegis-webhook
+  routes:
+    - matchers:
+        - severity = "critical"
+      receiver: aegis-webhook
+      continue: true
+    - matchers:
+        - severity = "warning"
+      receiver: aegis-webhook
+
+receivers:
+  - name: aegis-webhook
+    webhook_configs:
+      - url: http://aegis-ingestor:8001/webhooks/alertmanager
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+        max_alerts: 50
+
+inhibit_rules:
+  - source_matchers:
+      - severity = "critical"
+    target_matchers:
+      - severity = "warning"
+    equal: ['service']

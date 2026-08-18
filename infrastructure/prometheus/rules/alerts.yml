@@ -1,0 +1,89 @@
+groups:
+  - name: demo_service_alerts
+    interval: 15s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum by (job) (rate(http_requests_total{status=~"5.."}[2m]))
+            /
+            sum by (job) (rate(http_requests_total[2m]))
+          ) > 0.05
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "Error rate is {{ $value | humanizePercentage }} on {{ $labels.job }}"
+          service: "{{ $labels.job }}"
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (job, le) (rate(http_request_duration_seconds_bucket[2m]))
+          ) > 1.0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency on {{ $labels.job }}"
+          description: "p95 latency is {{ $value | humanizeDuration }} on {{ $labels.job }}"
+          service: "{{ $labels.job }}"
+
+      - alert: DatabaseConnectionExhaustion
+        expr: |
+          (
+            db_pool_connections_used
+            /
+            db_pool_connections_max
+          ) > 0.90
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool exhausted on {{ $labels.job }}"
+          description: "DB connections at {{ $value | humanizePercentage }} of max on {{ $labels.job }}"
+          service: "{{ $labels.job }}"
+
+      - alert: PodCrashLoop
+        expr: kube_pod_container_status_restarts_total > 3
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pod {{ $labels.pod }} is crash-looping"
+          description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has restarted {{ $value }} times"
+          service: "{{ $labels.container }}"
+
+      - alert: ServiceUnavailable
+        expr: up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Prometheus cannot reach {{ $labels.job }}"
+          service: "{{ $labels.job }}"
+
+      - alert: HighMemoryUsage
+        expr: |
+          (process_resident_memory_bytes / 1024 / 1024) > 512
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.job }}"
+          description: "Memory at {{ $value | humanize }}MB on {{ $labels.job }}"
+          service: "{{ $labels.job }}"
+
+  - name: aegis_platform_alerts
+    rules:
+      - alert: AegisWorkerDown
+        expr: up{job=~"aegis-.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Aegis component {{ $labels.job }} is down"
+          description: "Aegis worker {{ $labels.job }} is unreachable"
+          service: "aegis"

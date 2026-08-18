@@ -1,0 +1,46 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  # ── Demo services ────────────────────────────────────────────────────────────
+  - job_name: checkout
+    static_configs:
+      - targets: ['checkout-service:3001']
+    metrics_path: /metrics
+
+  - job_name: payment
+    static_configs:
+      - targets: ['payment-service:3002']
+    metrics_path: /metrics
+
+  - job_name: inventory
+    static_configs:
+      - targets: ['inventory-service:3003']
+    metrics_path: /metrics
+
+  # ── Aegis services ────────────────────────────────────────────────────────────
+  - job_name: aegis-api
+    static_configs:
+      - targets: ['aegis-api:8000']
+    metrics_path: /metrics
+
+  - job_name: aegis-ingestor
+    static_configs:
+      - targets: ['aegis-ingestor:8001']
+    metrics_path: /metrics
+
+  # ── Kubernetes node/pod metrics (when running in k8s) ─────────────────────
+  # Uncomment and configure for cluster-level metrics
+  # - job_name: kubernetes-pods
+  #   kubernetes_sd_configs:
+  #     - role: pod
