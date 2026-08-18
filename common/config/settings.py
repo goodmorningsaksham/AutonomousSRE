@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     # ── Kubernetes ────────────────────────────────────────────────────────────
     kubeconfig: str = ""
     kubernetes_in_cluster: bool = False
-    aegis_k8s_allowed_namespaces: str = "production,staging,demo"
+    aegis_k8s_allowed_namespaces: str = "production,staging,demo,default"
     aegis_k8s_allowed_deployments: str = "checkout,payment,inventory"
 
     @property

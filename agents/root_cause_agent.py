@@ -129,7 +129,7 @@ def _build_user_prompt(incident_id: str, service: str, namespace: str, evidence:
         k8s = evidence["kubernetes"]
         pod_count = k8s.get("pod_count", len(k8s.get("pods", [])))
         lines.append(f"\n### Kubernetes State — {pod_count} pods")
-        for pod in k8s["pods"][:5]:
+        for pod in k8s.get("pods", [])[:5]:
             lines.append(f"  Pod: {pod['name']}, Phase: {pod['phase']}")
             for cs in pod.get("container_statuses", []):
                 lines.append(f"    Container {cs['name']}: ready={cs['ready']}, restarts={cs['restart_count']}, state={cs['state']}")

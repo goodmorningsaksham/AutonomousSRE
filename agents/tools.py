@@ -157,7 +157,7 @@ async def get_kubernetes_state(
     # Validate namespace is allowed
     if namespace not in settings.allowed_namespaces:
         logger.warning("Namespace not allowed", namespace=namespace)
-        return {"error": f"Namespace {namespace!r} is not in the allowed list"}
+        return {"error": f"Namespace {namespace!r} is not in the allowed list", "pod_count": 0, "pods": [], "deployment": None}
 
     try:
         from kubernetes import client as k8s_client, config as k8s_config
@@ -252,7 +252,7 @@ async def get_recent_deployments(
     logger.info("Tool: get_recent_deployments", incident_id=incident_id, service=service)
 
     if namespace not in settings.allowed_namespaces:
-        return {"error": f"Namespace {namespace!r} is not allowed"}
+        return {"error": f"Namespace {namespace!r} is not allowed", "recent_deployments": []}
 
     try:
         from kubernetes import client as k8s_client, config as k8s_config
