@@ -14,10 +14,18 @@ Executes tests against live infrastructure:
 - Aegis Correlator, Outbox Publisher, Investigator, Temporal Worker
 """
 import asyncio
-import httpx
-import json
+from pathlib import Path
+import sys
 import time
 import uuid
+
+# Ensure repository root is in sys.path
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+import httpx
+import json
 
 
 async def main():
