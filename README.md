@@ -32,7 +32,7 @@ flowchart TD
 
     subgraph EventStream["Event Backbone"]
         INGEST["Alert Ingestor (:8001)"]
-        KAFKA{{"Kafka Broker (:9092)"}}
+        KAFKA["Kafka Broker (:9092)"]
         CORR["Correlator Worker"]
     end
 
@@ -45,12 +45,12 @@ flowchart TD
         INV["Investigator Worker"]
         RCA["Root Cause Agent (LLM)"]
         PLAN["Remediation Planner"]
-        POL[["Deterministic Policy Engine"]]
+        POL["Deterministic Policy Engine"]
         APP["Human Approval Gate"]
     end
 
     subgraph Orchestration["Durable Execution"]
-        TEMP{{"Temporal Engine (:7233)"}}
+        TEMP["Temporal Engine (:7233)"]
         TWORK["Temporal Worker"]
         K8S["Kubernetes API / Executor"]
         VERIF["Verification Engine"]
@@ -61,8 +61,10 @@ flowchart TD
         FE["React / TypeScript UI (:5173)"]
     end
 
-    SVC1 & SVC2 & SVC3 -->|Metrics / Logs / Traces| PROM & LOKI & TEMPO
-    PROM -->|Firing Alerts| AM
+    SVC1 --> PROM
+    SVC2 --> LOKI
+    SVC3 --> TEMPO
+    PROM --> AM
     AM -->|Alert Webhook| INGEST
     INGEST -->|alerts.raw| KAFKA
     KAFKA -->|Consume alerts| CORR
@@ -72,19 +74,19 @@ flowchart TD
     KAFKA -->|Trigger Investigation| INV
     INV -->|Start Workflow| TEMP
     TEMP -->|Execute Activity| TWORK
-    TWORK -->|Gather Evidence| PROM & LOKI & TEMPO & PG
+    TWORK -->|Gather Telemetry| PROM
     TWORK -->|Hypothesize RCA| RCA
     RCA -->|Propose Plan| PLAN
     PLAN -->|Evaluate Guardrails| POL
-    POL -->|Low Risk (Auto)| TWORK
-    POL -->|High Risk| APP
+    POL -->|Low Risk Auto Approved| TWORK
+    POL -->|High Risk Approval Needed| APP
     APP -->|API Approval Signal| TEMP
     TWORK -->|Execute Action| K8S
-    K8S -->|Modify State| ProductionServices
+    K8S -->|Remediate| SVC1
     TWORK -->|Verify SLIs| VERIF
-    VERIF -->|Recovered| PG
-    PG <-->|Query State| API
-    API <-->|Live Updates| FE
+    VERIF -->|Mark Resolved| PG
+    PG --> API
+    API --> FE
 ```
 
 ### Core Architectural Roles
@@ -414,15 +416,3 @@ aegis/
 ├── pyproject.toml              # Python project metadata and build configuration
 └── requirements.txt            # Python dependencies
 ```
-
----
-
-## Security & Bug Bounty
-
-Please see [SECURITY.md](SECURITY.md) for our full security policy and vulnerability disclosure procedures.
-
----
-
-## Contributing
-
-Contributions are welcome! Please review [CONTRIBUTING.md](CONTRIBUTING.md) for local development workflows and guidelines.
