@@ -195,7 +195,7 @@ export default function IncidentDetail() {
                 }}
               >
                 <Sparkles size={12} />
-                Google Gemini 1.5 Flash
+                Google Gemini 2.5 Flash
               </div>
             </div>
 

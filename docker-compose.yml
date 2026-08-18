@@ -386,7 +386,10 @@ services:
       PROMETHEUS_URL: http://prometheus:9090
       LOKI_URL: http://loki:3100
       TEMPO_URL: http://tempo:3200
+      TEMPORAL_HOST: temporal
     depends_on:
+      temporal:
+        condition: service_healthy
       kafka:
         condition: service_healthy
       postgres:

@@ -91,7 +91,7 @@ export default function App() {
               <Sparkles size={18} className="ai-sparkle" />
               <div>
                 <div className="ai-text-title">Google Gemini</div>
-                <div className="ai-text-sub">Gemini 1.5 Flash • Active</div>
+                <div className="ai-text-sub">Gemini 2.5 Flash • Active</div>
               </div>
             </div>
 

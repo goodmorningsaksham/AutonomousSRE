@@ -51,7 +51,7 @@ async def handle_incident_created(event: dict) -> None:
         logger.warning("Incident created event missing incident_id", event_id=event_id)
         return
 
-    if event_id and await _is_processed(event_id):
+    if event_id and await _is_already_processed(event_id):
         logger.info("Event already processed by investigator", event_id=event_id)
         return
 
