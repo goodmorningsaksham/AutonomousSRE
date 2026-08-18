@@ -9,7 +9,12 @@ import {
   XCircle,
   GitBranch,
   Clock,
-  FileText
+  FileText,
+  ExternalLink,
+  BarChart2,
+  Flame,
+  Terminal,
+  Layers
 } from 'lucide-react';
 import {
   fetchIncident,
@@ -479,6 +484,127 @@ export default function IncidentDetail() {
                   <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{v}</span>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Observability & Live Telemetry Deep Links */}
+          <div className="glass-card">
+            <div className="card-header" style={{ marginBottom: 12 }}>
+              <div className="card-header__title">
+                <BarChart2 size={16} style={{ color: 'var(--apple-orange)' }} />
+                Observability Deep Links
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Live Telemetry</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <a
+                href={`http://localhost:3000/d/service-overview?var-service=${incident.service}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: 13,
+                  color: 'var(--text-primary)',
+                  transition: 'all var(--transition-fast)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Flame size={15} style={{ color: '#ff9f0a' }} />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 12.5 }}>Grafana Dashboard</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Service health & RED metrics</div>
+                  </div>
+                </div>
+                <ExternalLink size={13} style={{ color: 'var(--text-tertiary)' }} />
+              </a>
+
+              <a
+                href={`http://localhost:9090/graph?g0.expr=rate(http_requests_total%7Bservice%3D%22${incident.service}%22%7D%5B5m%5D)&g0.tab=0`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: 13,
+                  color: 'var(--text-primary)',
+                  transition: 'all var(--transition-fast)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Activity size={15} style={{ color: 'var(--apple-red)' }} />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 12.5 }}>Prometheus Metrics</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Query error rate & latency</div>
+                  </div>
+                </div>
+                <ExternalLink size={13} style={{ color: 'var(--text-tertiary)' }} />
+              </a>
+
+              <a
+                href={`http://localhost:3000/explore?left=%7B%22datasource%22%3A%22Loki%22%2C%22queries%22%3A%5B%7B%22expr%22%3A%22%7Bapp%3D%5C%22${incident.service}%5C%22%7D%22%7D%5D%7D`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: 13,
+                  color: 'var(--text-primary)',
+                  transition: 'all var(--transition-fast)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Terminal size={15} style={{ color: 'var(--apple-blue)' }} />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 12.5 }}>Loki Log Stream</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Live container stdout & traces</div>
+                  </div>
+                </div>
+                <ExternalLink size={13} style={{ color: 'var(--text-tertiary)' }} />
+              </a>
+
+              <a
+                href={`http://localhost:3000/explore?left=%7B%22datasource%22%3A%22Tempo%22%2C%22queries%22%3A%5B%7B%22query%22%3A%22%7Bservice.name%3D%5C%22${incident.service}%5C%22%7D%22%7D%5D%7D`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: 13,
+                  color: 'var(--text-primary)',
+                  transition: 'all var(--transition-fast)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Layers size={15} style={{ color: 'var(--apple-purple)' }} />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 12.5 }}>Tempo Distributed Traces</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Waterfall latency spans</div>
+                  </div>
+                </div>
+                <ExternalLink size={13} style={{ color: 'var(--text-tertiary)' }} />
+              </a>
             </div>
           </div>
 
