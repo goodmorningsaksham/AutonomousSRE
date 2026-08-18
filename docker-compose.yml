@@ -1,0 +1,436 @@
+version: "3.9"
+
+# ─── Shared network ───────────────────────────────────────────────────────────
+networks:
+  aegis-net:
+    driver: bridge
+
+# ─── Named volumes ────────────────────────────────────────────────────────────
+volumes:
+  postgres-data:
+  demo-postgres-data:
+  redis-data:
+  kafka-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  tempo-data:
+
+services:
+
+  # ─── Infrastructure ──────────────────────────────────────────────────────────
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: aegis-postgres
+    environment:
+      POSTGRES_USER: aegis
+      POSTGRES_PASSWORD: aegis_secret
+      POSTGRES_DB: aegis
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - aegis-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aegis -d aegis"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  demo-postgres:
+    image: postgres:16-alpine
+    container_name: demo-postgres
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo_secret
+      POSTGRES_DB: demo
+    ports:
+      - "5433:5432"
+    volumes:
+      - demo-postgres-data:/var/lib/postgresql/data
+    networks:
+      - aegis-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: aegis-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - aegis-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  demo-redis:
+    image: redis:7-alpine
+    container_name: demo-redis
+    ports:
+      - "6380:6379"
+    networks:
+      - aegis-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: aegis-kafka
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092"
+      KAFKA_LISTENERS: "PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:29093"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_DIRS: "/tmp/kraft-combined-logs"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    volumes:
+      - kafka-data:/tmp/kraft-combined-logs
+    networks:
+      - aegis-net
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  temporal:
+    image: temporalio/auto-setup:1.24.2
+    container_name: aegis-temporal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: aegis
+      POSTGRES_PWD: aegis_secret
+      POSTGRES_SEEDS: postgres
+      DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/dynamicconfig/development-sql.yaml
+    ports:
+      - "7233:7233"
+    networks:
+      - aegis-net
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+
+  temporal-ui:
+    image: temporalio/ui:2.26.2
+    container_name: aegis-temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8088:8080"
+    networks:
+      - aegis-net
+
+  # ─── Observability ────────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: aegis-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./infrastructure/prometheus/rules:/etc/prometheus/rules
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+      - "--storage.tsdb.retention.time=15d"
+    networks:
+      - aegis-net
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: aegis-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./infrastructure/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+    networks:
+      - aegis-net
+
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: aegis-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./infrastructure/loki/loki.yaml:/etc/loki/loki.yaml
+      - loki-data:/loki
+    command: -config.file=/etc/loki/loki.yaml
+    networks:
+      - aegis-net
+
+  tempo:
+    image: grafana/tempo:2.5.0
+    container_name: aegis-tempo
+    ports:
+      - "3200:3200"
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    volumes:
+      - ./infrastructure/tempo/tempo.yaml:/etc/tempo/tempo.yaml
+      - tempo-data:/tmp/tempo
+    command: -config.file=/etc/tempo/tempo.yaml
+    networks:
+      - aegis-net
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: aegis-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana-data:/var/lib/grafana
+    networks:
+      - aegis-net
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+
+  promtail:
+    image: grafana/promtail:3.1.0
+    container_name: aegis-promtail
+    volumes:
+      - ./infrastructure/loki/promtail.yaml:/etc/promtail/promtail.yaml
+      - /var/log:/var/log:ro
+    command: -config.file=/etc/promtail/promtail.yaml
+    networks:
+      - aegis-net
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.102.0
+    container_name: aegis-otel
+    ports:
+      - "4319:4317"   # OTLP gRPC (external → collector)
+      - "4320:4318"   # OTLP HTTP (external → collector)
+      - "8889:8889"   # Prometheus scrape endpoint
+    volumes:
+      - ./infrastructure/otel/otel-collector.yaml:/etc/otel-collector.yaml
+    command: --config=/etc/otel-collector.yaml
+    networks:
+      - aegis-net
+
+  # ─── Demo Services ─────────────────────────────────────────────────────────
+
+  checkout-service:
+    build:
+      context: .
+      dockerfile: services/demo/checkout/Dockerfile
+    container_name: demo-checkout
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      PAYMENT_URL: http://payment-service:3002
+      INVENTORY_URL: http://inventory-service:3003
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: checkout
+    depends_on:
+      - payment-service
+      - inventory-service
+    networks:
+      - aegis-net
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: services/demo/payment/Dockerfile
+    container_name: demo-payment
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      DATABASE_URL: postgresql://demo:demo_secret@demo-postgres:5432/demo
+      REDIS_URL: redis://demo-redis:6379/0
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: payment
+    depends_on:
+      demo-postgres:
+        condition: service_healthy
+      demo-redis:
+        condition: service_healthy
+    networks:
+      - aegis-net
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: services/demo/inventory/Dockerfile
+    container_name: demo-inventory
+    ports:
+      - "3003:3003"
+    environment:
+      PORT: 3003
+      REDIS_URL: redis://demo-redis:6379/0
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: inventory
+    depends_on:
+      demo-redis:
+        condition: service_healthy
+    networks:
+      - aegis-net
+
+  # ─── Aegis Services ──────────────────────────────────────────────────────────
+
+  aegis-api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    container_name: aegis-api
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DATABASE_URL: postgresql+asyncpg://aegis:aegis_secret@postgres:5432/aegis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - aegis-net
+
+  aegis-ingestor:
+    build:
+      context: .
+      dockerfile: services/alert_ingestor/Dockerfile
+    container_name: aegis-ingestor
+    ports:
+      - "8001:8001"
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DATABASE_URL: postgresql+asyncpg://aegis:aegis_secret@postgres:5432/aegis
+      AEGIS_INGESTOR_PORT: 8001
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - aegis-net
+
+  aegis-correlator:
+    build:
+      context: .
+      dockerfile: services/correlator/Dockerfile
+    container_name: aegis-correlator
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DATABASE_URL: postgresql+asyncpg://aegis:aegis_secret@postgres:5432/aegis
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - aegis-net
+
+  aegis-investigator:
+    build:
+      context: .
+      dockerfile: services/investigator/Dockerfile
+    container_name: aegis-investigator
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DATABASE_URL: postgresql+asyncpg://aegis:aegis_secret@postgres:5432/aegis
+      PROMETHEUS_URL: http://prometheus:9090
+      LOKI_URL: http://loki:3100
+      TEMPO_URL: http://tempo:3200
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - aegis-net
+
+  aegis-temporal-worker:
+    build:
+      context: .
+      dockerfile: services/temporal_worker/Dockerfile
+    container_name: aegis-temporal-worker
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DATABASE_URL: postgresql+asyncpg://aegis:aegis_secret@postgres:5432/aegis
+      TEMPORAL_HOST: temporal
+      PROMETHEUS_URL: http://prometheus:9090
+    depends_on:
+      temporal:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - aegis-net
+
+  aegis-outbox-publisher:
+    build:
+      context: .
+      dockerfile: services/outbox_publisher/Dockerfile
+    container_name: aegis-outbox-publisher
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DATABASE_URL: postgresql+asyncpg://aegis:aegis_secret@postgres:5432/aegis
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - aegis-net

@@ -1,0 +1,49 @@
+# Core & API
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+httpx>=0.27.0
+aiohttp>=3.9.0
+
+# Database & ORM
+SQLAlchemy>=2.0.28
+alembic>=1.13.1
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.9
+pgvector>=0.2.5
+
+# Event Streaming & Cache
+aiokafka>=0.10.0
+redis>=5.0.3
+
+# Workflow Orchestration
+temporalio>=1.5.1
+
+# Kubernetes & Cloud Native
+kubernetes>=29.0.0
+
+# Telemetry & Observability
+prometheus-client>=0.20.0
+opentelemetry-api>=1.23.0
+opentelemetry-sdk>=1.23.0
+opentelemetry-instrumentation-fastapi>=0.44b0
+opentelemetry-exporter-otlp>=1.23.0
+
+# AI & Reasoning
+openai>=1.14.0
+tiktoken>=0.6.0
+
+# Utilities & CLI
+click>=8.1.7
+rich>=13.7.1
+python-dotenv>=1.0.1
+pyyaml>=6.0.1
+structlog>=24.1.0
+
+# Testing
+pytest>=8.1.1
+pytest-asyncio>=0.23.6
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+freezegun>=1.4.0
