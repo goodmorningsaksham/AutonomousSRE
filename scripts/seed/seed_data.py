@@ -151,7 +151,7 @@ async def seed() -> None:
                 )
                 session.add(hi)
 
-    print(f"✓ Seeded {len(RUNBOOKS)} runbooks and {len(HISTORICAL)} historical incidents")
+    print(f"[OK] Seeded {len(RUNBOOKS)} runbooks and {len(HISTORICAL)} historical incidents")
 
 
 if __name__ == "__main__":

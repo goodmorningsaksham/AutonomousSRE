@@ -24,7 +24,7 @@ PAYMENT_URL = "http://localhost:3002"
 pytestmark = pytest.mark.asyncio
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 async def http_client():
     async with httpx.AsyncClient(timeout=10.0) as client:
         yield client

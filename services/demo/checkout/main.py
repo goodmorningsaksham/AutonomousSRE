@@ -13,13 +13,16 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExport
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from prometheus_client import Counter, Histogram, make_asgi_app
+from prometheus_client import CollectorRegistry, Counter, Histogram, make_asgi_app
 import structlog
 
 otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
-tracer_provider = TracerProvider()
-tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint)))
-trace.set_tracer_provider(tracer_provider)
+try:
+    tracer_provider = TracerProvider()
+    tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint)))
+    trace.set_tracer_provider(tracer_provider)
+except Exception:
+    pass
 tracer = trace.get_tracer("checkout-service")
 
 structlog.configure(processors=[
@@ -29,8 +32,9 @@ structlog.configure(processors=[
 ])
 logger = structlog.get_logger()
 
-REQUEST_COUNT = Counter("http_requests_total", "HTTP requests", ["method", "endpoint", "status"])
-REQUEST_LATENCY = Histogram("http_request_duration_seconds", "Latency", ["method", "endpoint"])
+REGISTRY = CollectorRegistry(auto_describe=True)
+REQUEST_COUNT = Counter("http_requests_total", "HTTP requests", ["method", "endpoint", "status"], registry=REGISTRY)
+REQUEST_LATENCY = Histogram("http_request_duration_seconds", "Latency", ["method", "endpoint"], registry=REGISTRY)
 
 PORT = int(os.getenv("PORT", "3001"))
 PAYMENT_URL = os.getenv("PAYMENT_URL", "http://localhost:3002")
@@ -38,7 +42,7 @@ INVENTORY_URL = os.getenv("INVENTORY_URL", "http://localhost:3003")
 
 app = FastAPI(title="Checkout Service")
 FastAPIInstrumentor.instrument_app(app)
-metrics_app = make_asgi_app()
+metrics_app = make_asgi_app(registry=REGISTRY)
 app.mount("/metrics", metrics_app)
 
 
@@ -121,4 +125,4 @@ async def recover():
 
 
 if __name__ == "__main__":
-    uvicorn.run("services.demo.checkout.main:app", host="0.0.0.0", port=PORT, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=PORT)

@@ -30,11 +30,14 @@ import structlog
 
 # ── OpenTelemetry setup ───────────────────────────────────────────────────────
 otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
-tracer_provider = TracerProvider()
-tracer_provider.add_span_processor(
-    BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))
-)
-trace.set_tracer_provider(tracer_provider)
+try:
+    tracer_provider = TracerProvider()
+    tracer_provider.add_span_processor(
+        BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))
+    )
+    trace.set_tracer_provider(tracer_provider)
+except Exception:
+    pass
 tracer = trace.get_tracer("payment-service")
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -48,10 +51,12 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # ── Prometheus Metrics ────────────────────────────────────────────────────────
-REQUEST_COUNT = Counter("http_requests_total", "Total HTTP requests", ["method", "endpoint", "status"])
-REQUEST_LATENCY = Histogram("http_request_duration_seconds", "Request latency", ["method", "endpoint"])
-DB_POOL_USED = Gauge("db_pool_connections_used", "DB pool connections in use")
-DB_POOL_MAX = Gauge("db_pool_connections_max", "DB pool max connections")
+from prometheus_client import CollectorRegistry
+REGISTRY = CollectorRegistry(auto_describe=True)
+REQUEST_COUNT = Counter("http_requests_total", "Total HTTP requests", ["method", "endpoint", "status"], registry=REGISTRY)
+REQUEST_LATENCY = Histogram("http_request_duration_seconds", "Request latency", ["method", "endpoint"], registry=REGISTRY)
+DB_POOL_USED = Gauge("db_pool_connections_used", "DB pool connections in use", registry=REGISTRY)
+DB_POOL_MAX = Gauge("db_pool_connections_max", "DB pool max connections", registry=REGISTRY)
 
 PORT = int(os.getenv("PORT", "3002"))
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://demo:demo_secret@localhost:5433/demo")
@@ -98,7 +103,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Payment Service", lifespan=lifespan)
 FastAPIInstrumentor.instrument_app(app)
-metrics_app = make_asgi_app()
+metrics_app = make_asgi_app(registry=REGISTRY)
 app.mount("/metrics", metrics_app)
 
 
@@ -253,4 +258,4 @@ async def recover():
 
 
 if __name__ == "__main__":
-    uvicorn.run("services.demo.payment.main:app", host="0.0.0.0", port=PORT, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=PORT)

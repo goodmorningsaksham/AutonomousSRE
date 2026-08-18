@@ -180,6 +180,7 @@ async def get_kubernetes_state(
         pods_response = v1.list_namespaced_pod(
             namespace=namespace,
             label_selector=f"app={service}",
+            _request_timeout=2.0,
         )
 
         pods = []
@@ -212,7 +213,7 @@ async def get_kubernetes_state(
         # Get deployment
         deployment_info = None
         try:
-            dep = apps_v1.read_namespaced_deployment(name=service, namespace=namespace)
+            dep = apps_v1.read_namespaced_deployment(name=service, namespace=namespace, _request_timeout=2.0)
             deployment_info = {
                 "name": dep.metadata.name,
                 "replicas": dep.spec.replicas,
@@ -235,7 +236,7 @@ async def get_kubernetes_state(
 
     except Exception as exc:
         logger.error("Kubernetes tool error", error=str(exc))
-        return {"error": str(exc), "pods": [], "deployment": None}
+        return {"error": str(exc), "pod_count": 0, "pods": [], "deployment": None}
 
 
 # ── Deployment History Tool ────────────────────────────────────────────────────
@@ -271,6 +272,7 @@ async def get_recent_deployments(
         rs_list = apps_v1.list_namespaced_replica_set(
             namespace=namespace,
             label_selector=f"app={service}",
+            _request_timeout=2.0,
         )
 
         recent_deployments = []

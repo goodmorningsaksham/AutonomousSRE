@@ -192,9 +192,12 @@ async def main() -> None:
     await ensure_topics_exist()
     logger.info("Investigator worker starting")
 
+    import uuid
+    instance_group = f"{CONSUMER_GROUP}-{uuid.uuid4().hex[:8]}"
+
     consumer = AegisConsumer(
         topics=[KafkaTopic.INCIDENTS_CREATED.value],
-        group_id=CONSUMER_GROUP,
+        group_id=instance_group,
         handler=handle_incident_created,
         idempotency_checker=_is_already_processed,
     )

@@ -1,0 +1,227 @@
+# ── Aegis ConfigMap ───────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aegis-config
+  namespace: aegis-system
+data:
+  AEGIS_ENV: "production"
+  LOG_LEVEL: "INFO"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka.aegis-system:9092"
+  DATABASE_URL: "postgresql+asyncpg://aegis:aegis_secret@postgres.aegis-system:5432/aegis"
+  DATABASE_URL_SYNC: "postgresql+psycopg2://aegis:aegis_secret@postgres.aegis-system:5432/aegis"
+  REDIS_URL: "redis://redis.aegis-system:6379/0"
+  TEMPORAL_HOST: "temporal.aegis-system"
+  TEMPORAL_PORT: "7233"
+  PROMETHEUS_URL: "http://prometheus.aegis-system:9090"
+  LOKI_URL: "http://loki.aegis-system:3100"
+  TEMPO_URL: "http://tempo.aegis-system:3200"
+  KUBERNETES_IN_CLUSTER: "true"
+  AEGIS_K8S_ALLOWED_NAMESPACES: "production,staging,demo"
+  AEGIS_K8S_ALLOWED_DEPLOYMENTS: "checkout,payment,inventory"
+---
+# ── Aegis API Deployment & Service ───────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aegis-api
+  namespace: aegis-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aegis-api
+  template:
+    metadata:
+      labels:
+        app: aegis-api
+    spec:
+      serviceAccountName: aegis-controller
+      containers:
+        - name: api
+          image: aegis-api:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: aegis-config
+          ports:
+            - containerPort: 8000
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aegis-api
+  namespace: aegis-system
+spec:
+  selector:
+    app: aegis-api
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+---
+# ── Aegis Ingestor Deployment & Service ───────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aegis-ingestor
+  namespace: aegis-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aegis-ingestor
+  template:
+    metadata:
+      labels:
+        app: aegis-ingestor
+    spec:
+      serviceAccountName: aegis-controller
+      containers:
+        - name: ingestor
+          image: aegis-ingestor:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: aegis-config
+          ports:
+            - containerPort: 8001
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 3
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aegis-ingestor
+  namespace: aegis-system
+spec:
+  selector:
+    app: aegis-ingestor
+  ports:
+    - port: 8001
+      targetPort: 8001
+      name: http
+---
+# ── Aegis Correlator Worker ───────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aegis-correlator
+  namespace: aegis-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aegis-correlator
+  template:
+    metadata:
+      labels:
+        app: aegis-correlator
+    spec:
+      serviceAccountName: aegis-controller
+      containers:
+        - name: correlator
+          image: aegis-correlator:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: aegis-config
+---
+# ── Aegis Investigator Worker ─────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aegis-investigator
+  namespace: aegis-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aegis-investigator
+  template:
+    metadata:
+      labels:
+        app: aegis-investigator
+    spec:
+      serviceAccountName: aegis-controller
+      containers:
+        - name: investigator
+          image: aegis-investigator:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: aegis-config
+---
+# ── Aegis Outbox Publisher ───────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aegis-outbox
+  namespace: aegis-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aegis-outbox
+  template:
+    metadata:
+      labels:
+        app: aegis-outbox
+    spec:
+      serviceAccountName: aegis-controller
+      containers:
+        - name: outbox
+          image: aegis-outbox:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: aegis-config
+---
+# ── Aegis Temporal Workflow Worker ───────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aegis-temporal-worker
+  namespace: aegis-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aegis-temporal-worker
+  template:
+    metadata:
+      labels:
+        app: aegis-temporal-worker
+    spec:
+      serviceAccountName: aegis-controller
+      containers:
+        - name: temporal-worker
+          image: aegis-temporal-worker:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: aegis-config

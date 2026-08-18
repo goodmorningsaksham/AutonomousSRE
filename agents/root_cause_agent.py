@@ -125,9 +125,10 @@ def _build_user_prompt(incident_id: str, service: str, namespace: str, evidence:
             lines.append(f"  [{entry['timestamp']}] {entry['line'][:200]}")
 
     # Kubernetes state
-    k8s = evidence.get("kubernetes", {})
-    if "pods" in k8s:
-        lines.append(f"\n### Kubernetes State — {k8s['pod_count']} pods")
+    if evidence.get("kubernetes"):
+        k8s = evidence["kubernetes"]
+        pod_count = k8s.get("pod_count", len(k8s.get("pods", [])))
+        lines.append(f"\n### Kubernetes State — {pod_count} pods")
         for pod in k8s["pods"][:5]:
             lines.append(f"  Pod: {pod['name']}, Phase: {pod['phase']}")
             for cs in pod.get("container_statuses", []):

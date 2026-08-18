@@ -35,7 +35,6 @@ class AegisProducer:
             key_serializer=lambda k: k.encode("utf-8") if k else None,
             acks="all",
             enable_idempotence=True,
-            max_in_flight_requests_per_connection=1,
             retry_backoff_ms=500,
         )
         await self._producer.start()

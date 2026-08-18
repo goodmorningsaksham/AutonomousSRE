@@ -38,9 +38,11 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 # ── Prometheus Metrics ────────────────────────────────────────────────────────
-INCIDENTS_CREATED = Counter("aegis_incidents_created_total", "Total incidents created")
-INCIDENTS_RESOLVED = Counter("aegis_incidents_resolved_total", "Total incidents resolved")
-API_LATENCY = Histogram("aegis_api_request_duration_seconds", "API request latency", ["endpoint"])
+from prometheus_client import CollectorRegistry
+REGISTRY = CollectorRegistry(auto_describe=True)
+INCIDENTS_CREATED = Counter("aegis_incidents_created_total", "Total incidents created", registry=REGISTRY)
+INCIDENTS_RESOLVED = Counter("aegis_incidents_resolved_total", "Total incidents resolved", registry=REGISTRY)
+API_LATENCY = Histogram("aegis_api_request_duration_seconds", "API request latency", ["endpoint"], registry=REGISTRY)
 
 
 @contextlib.asynccontextmanager
@@ -65,7 +67,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-metrics_app = make_asgi_app()
+metrics_app = make_asgi_app(registry=REGISTRY)
 app.mount("/metrics", metrics_app)
 
 
@@ -273,6 +275,7 @@ async def approve_remediation(
 
 # ── Stats ─────────────────────────────────────────────────────────────────────
 @app.get("/api/v1/stats")
+@app.get("/api/v1/incidents/stats/summary")
 async def get_stats(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     from sqlalchemy import func
 
@@ -290,8 +293,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
 
 if __name__ == "__main__":
     uvicorn.run(
-        "services.api.main:app",
+        app,
         host="0.0.0.0",
         port=settings.aegis_api_port,
-        reload=settings.aegis_env == "development",
     )

@@ -27,7 +27,7 @@ from typing import Optional
 from temporalio import activity, workflow
 from temporalio.client import Client
 from temporalio.common import RetryPolicy
-from temporalio.worker import Worker
+from temporalio.worker import UnsandboxedWorkflowRunner, Worker
 
 from common.config.settings import get_settings
 from common.events.schemas import (
@@ -69,9 +69,7 @@ class IncidentWorkflow:
         correlation_id = input.get("correlation_id", new_event_id())
 
         workflow.logger.info(
-            "Incident workflow started",
-            incident_id=incident_id,
-            service=service,
+            f"Incident workflow started for {incident_id} (service: {service})"
         )
 
         retry_policy = RetryPolicy(
@@ -214,7 +212,7 @@ class IncidentWorkflow:
                 args=[incident_id, IncidentStatus.RESOLVED.value, "Recovery verified"],
                 start_to_close_timeout=timedelta(seconds=30),
             )
-            workflow.logger.info("Incident resolved", incident_id=incident_id)
+            workflow.logger.info(f"Incident resolved: {incident_id}")
             return {"status": "RESOLVED", "incident_id": incident_id}
         else:
             await workflow.execute_activity(
@@ -371,6 +369,19 @@ async def request_approval_activity(incident_id: str, plan_result: dict, rca_res
 
     async with AsyncSessionLocal() as session:
         async with session.begin():
+            plan_record = PlanModel(
+                id=plan_data["plan_id"],
+                incident_id=incident_id,
+                action=plan_data["action"],
+                target=plan_data["target"],
+                namespace=plan_data["namespace"],
+                parameters=plan_data.get("parameters", {}),
+                risk_level=plan_data["risk_level"],
+                reason=plan_data.get("reason", ""),
+                requires_approval=True,
+                status="PENDING",
+            )
+            session.add(plan_record)
             approval = Approval(
                 id=new_event_id(),
                 plan_id=plan_data["plan_id"],
@@ -522,6 +533,7 @@ async def run_worker() -> None:
             verify_recovery_activity,
             update_incident_status_activity,
         ],
+        workflow_runner=UnsandboxedWorkflowRunner(),
     )
 
     logger.info("Temporal worker starting", task_queue=TASK_QUEUE)

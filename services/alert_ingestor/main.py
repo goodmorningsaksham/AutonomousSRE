@@ -38,18 +38,23 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 # ── Prometheus Metrics ────────────────────────────────────────────────────────
+from prometheus_client import CollectorRegistry
+REGISTRY = CollectorRegistry(auto_describe=True)
 ALERTS_RECEIVED = Counter(
     "aegis_alerts_received_total",
     "Total Alertmanager webhooks received",
     ["severity"],
+    registry=REGISTRY,
 )
 ALERTS_PUBLISHED = Counter(
     "aegis_alerts_published_total",
     "Total alert events published to Kafka",
+    registry=REGISTRY,
 )
 ALERTS_REJECTED = Counter(
     "aegis_alerts_rejected_total",
     "Total alert payloads rejected due to validation errors",
+    registry=REGISTRY,
 )
 
 producer = AegisProducer()
@@ -80,7 +85,7 @@ app.add_middleware(
 )
 
 # Mount Prometheus metrics endpoint
-metrics_app = make_asgi_app()
+metrics_app = make_asgi_app(registry=REGISTRY)
 app.mount("/metrics", metrics_app)
 
 
@@ -217,8 +222,7 @@ async def manual_alert(payload: RawAlertPayload) -> dict[str, Any]:
 
 if __name__ == "__main__":
     uvicorn.run(
-        "services.alert_ingestor.main:app",
+        app,
         host="0.0.0.0",
         port=settings.aegis_ingestor_port,
-        reload=settings.aegis_env == "development",
     )
