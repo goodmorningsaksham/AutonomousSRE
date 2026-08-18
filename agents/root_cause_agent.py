@@ -109,6 +109,7 @@ def _build_user_prompt(
     """Construct the evidence summary for the LLM."""
     lines = [
         f"## Incident: {incident_id}",
+        f"## Service: {service}",
         f"## Service Under Investigation: {service} (namespace: {namespace})",
         f"## Incident Title / Symptom: {incident_title or service}",
     ]

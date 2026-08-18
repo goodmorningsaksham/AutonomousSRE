@@ -1,48 +1,59 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-  /* ─── Apple Luxury Palette & Glass Tokens ─── */
-  --bg-base: #06080d;
-  --bg-subtle: #0b0f17;
-  --surface-glass: rgba(18, 24, 38, 0.65);
-  --surface-glass-hover: rgba(28, 36, 56, 0.8);
-  --surface-elevated: rgba(26, 34, 52, 0.75);
-  --surface-card: rgba(15, 20, 32, 0.7);
-  --surface-input: rgba(10, 14, 24, 0.8);
+  /* ─── Apple Pro Obsidian Black & White Luxury Tokens ─── */
+  --bg-base: #000000;
+  --bg-subtle: #070709;
+  --surface-glass: rgba(14, 14, 17, 0.72);
+  --surface-glass-hover: rgba(24, 24, 28, 0.85);
+  --surface-elevated: rgba(20, 20, 24, 0.8);
+  --surface-card: rgba(12, 12, 15, 0.75);
+  --surface-input: rgba(10, 10, 12, 0.85);
 
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-focus: rgba(0, 113, 227, 0.6);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-focus: rgba(255, 255, 255, 0.35);
   --border-glass: rgba(255, 255, 255, 0.12);
+  --border-metallic: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 100%);
 
-  /* ─── Apple Accents ─── */
-  --apple-blue: #2997ff;
-  --apple-blue-glow: rgba(41, 151, 255, 0.25);
-  --apple-cyan: #64d2ff;
+  /* ─── Status Labels (Functional Apple Colors) ─── */
   --apple-green: #30d158;
   --apple-green-glow: rgba(48, 209, 88, 0.2);
+  --apple-green-subtle: rgba(48, 209, 88, 0.12);
+
   --apple-yellow: #ffd60a;
   --apple-yellow-glow: rgba(255, 214, 10, 0.2);
+  --apple-yellow-subtle: rgba(255, 214, 10, 0.12);
+
   --apple-orange: #ff9f0a;
+  --apple-orange-glow: rgba(255, 159, 10, 0.2);
+  --apple-orange-subtle: rgba(255, 159, 10, 0.12);
+
   --apple-red: #ff453a;
   --apple-red-glow: rgba(255, 69, 58, 0.25);
-  --apple-purple: #bf5af2;
-  --apple-purple-glow: rgba(191, 90, 242, 0.25);
-  --apple-pink: #ff375f;
+  --apple-red-subtle: rgba(255, 69, 58, 0.12);
 
-  /* ─── Typography & Contrast ─── */
-  --text-primary: #f5f5f7;
-  --text-secondary: #a1a1a6;
-  --text-tertiary: #6e6e73;
-  --text-quaternary: #48484a;
+  --apple-blue: #2997ff;
+  --apple-blue-glow: rgba(41, 151, 255, 0.25);
+  --apple-blue-subtle: rgba(41, 151, 255, 0.12);
+
+  /* ─── Apple Intelligence AI Purple ─── */
+  --apple-purple: #af52de;
+  --apple-purple-glow: rgba(175, 82, 222, 0.28);
+  --apple-purple-subtle: rgba(175, 82, 222, 0.12);
+
+  /* ─── Apple Typography Contrast ─── */
+  --text-primary: #ffffff;
+  --text-secondary: #98989d;
+  --text-tertiary: #636366;
+  --text-quaternary: #3a3a3c;
 
   /* ─── Blur & Elevation ─── */
   --blur-glass: blur(28px);
   --blur-subtle: blur(14px);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.45);
-  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border-subtle);
-  --shadow-glow-blue: 0 0 24px rgba(41, 151, 255, 0.35);
-  --shadow-glow-purple: 0 0 24px rgba(191, 90, 242, 0.35);
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 12px 36px rgba(0, 0, 0, 0.65);
+  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.8), 0 0 0 1px var(--border-subtle);
+  --shadow-glow-purple: 0 0 32px rgba(175, 82, 222, 0.25);
 
   --radius-xs: 6px;
   --radius-sm: 10px;
