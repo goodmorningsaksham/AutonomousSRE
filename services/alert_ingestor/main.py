@@ -184,6 +184,12 @@ async def alertmanager_webhook(
             event = make_alert_raw_event(raw_payload)
 
             await producer.send(KafkaTopic.ALERTS_RAW.value, event)
+            await _ship_log_to_loki(
+                service=service,
+                alert_name=alert_name,
+                message=f"Alert firing: {annotations.get('summary', '')} — {annotations.get('description', '')}",
+                severity=severity.value,
+            )
 
             ALERTS_RECEIVED.labels(severity=severity.value).inc()
             ALERTS_PUBLISHED.inc()
@@ -210,11 +216,48 @@ async def alertmanager_webhook(
     }
 
 
+async def _ship_log_to_loki(service: str, alert_name: str, message: str, severity: str = "error"):
+    try:
+        import httpx, time
+        now_ns = str(int(time.time() * 1e9))
+        payload = {
+            "streams": [
+                {
+                    "stream": {
+                        "service": service,
+                        "job": service,
+                        "level": "error" if severity in ["critical", "high", "error"] else "warning",
+                        "app": service,
+                        "env": "production",
+                    },
+                    "values": [
+                        [now_ns, f"[{severity.upper()}] [ALERT_FIRING] {alert_name}: {message}"]
+                    ]
+                }
+            ]
+        }
+        async with httpx.AsyncClient(timeout=0.8) as client:
+            for host in ["aegis-loki", "loki", "localhost", "127.0.0.1"]:
+                try:
+                    await client.post(f"http://{host}:3100/loki/api/v1/push", json=payload)
+                    break
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
 @app.post("/api/v1/alerts", status_code=status.HTTP_202_ACCEPTED)
 async def manual_alert(payload: RawAlertPayload) -> dict[str, Any]:
     """Manual alert injection endpoint for testing."""
     event = make_alert_raw_event(payload)
     await producer.send(KafkaTopic.ALERTS_RAW.value, event)
+    await _ship_log_to_loki(
+        service=payload.service,
+        alert_name=payload.alert_name,
+        message=f"{payload.annotations.get('summary', '')} — {payload.annotations.get('description', '')}",
+        severity=payload.severity.value,
+    )
     ALERTS_RECEIVED.labels(severity=payload.severity.value).inc()
     ALERTS_PUBLISHED.inc()
     return {"status": "accepted", "event_id": event.event_id}
