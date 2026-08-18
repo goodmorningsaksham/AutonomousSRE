@@ -15,6 +15,7 @@ import {
   fetchIncident,
   fetchPendingApprovals,
   submitApproval,
+  submitIncidentApproval,
   type IncidentDetail,
   type PendingApproval
 } from '../api';
@@ -86,17 +87,26 @@ export default function IncidentDetail() {
   }, [id]);
 
   const handleDecision = async (decision: 'approved' | 'rejected') => {
-    if (!pendingApproval) return;
+    if (!id) return;
     setSubmitting(true);
     try {
-      await submitApproval(
-        pendingApproval.approval_id,
-        decision,
-        'sre-lead@aegis.corp',
-        `Decision: ${decision} from Apple SRE Console`
-      );
+      if (pendingApproval) {
+        await submitApproval(
+          pendingApproval.approval_id,
+          decision,
+          'sre-lead@aegis.corp',
+          `Decision: ${decision} from Apple SRE Console`
+        );
+      } else {
+        await submitIncidentApproval(
+          id,
+          decision,
+          'sre-lead@aegis.corp',
+          `Decision: ${decision} from Apple SRE Console`
+        );
+      }
       setPendingApproval(null);
-      load();
+      await load();
     } catch {
       alert(`Failed to submit ${decision} decision. Please try again.`);
     } finally {
@@ -321,7 +331,7 @@ export default function IncidentDetail() {
                 </div>
 
                 {/* Inline Human Approval Gate */}
-                {pendingApproval && (
+                {(pendingApproval || incident.status === 'AWAITING_APPROVAL') && (
                   <div
                     style={{
                       background: 'rgba(255, 214, 10, 0.08)',
@@ -338,7 +348,7 @@ export default function IncidentDetail() {
                       Human Approval Required to Proceed
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                      The AI agent proposed <strong>{pendingApproval.action}</strong> on <strong>{pendingApproval.target}</strong>.
+                      The AI agent proposed <strong>{pendingApproval?.action || latestPlan.action}</strong> on <strong>{pendingApproval?.target || latestPlan.target}</strong>.
                       Click below to authorize immediate Kubernetes execution.
                     </div>
 

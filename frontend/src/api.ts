@@ -93,5 +93,8 @@ export const fetchPendingApprovals = () =>
 export const submitApproval = (approvalId: string, decision: 'approved' | 'rejected', approvedBy: string, notes?: string) =>
   api.post(`/api/v1/approvals/${approvalId}/approve`, { decision, approved_by: approvedBy, notes: notes || '' }).then(r => r.data);
 
+export const submitIncidentApproval = (incidentId: string, decision: 'approved' | 'rejected', approvedBy: string, notes?: string) =>
+  api.post(`/api/v1/incidents/${incidentId}/approve`, { decision, approved_by: approvedBy, notes: notes || '' }).then(r => r.data);
+
 export const fetchStats = () =>
   api.get<Stats>('/api/v1/stats').then(r => r.data);
