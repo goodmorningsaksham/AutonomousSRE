@@ -137,11 +137,11 @@ services:
     networks:
       - aegis-net
     healthcheck:
-      test: ["CMD", "temporal", "operator", "cluster", "health"]
-      interval: 15s
-      timeout: 10s
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "temporal:7233"]
+      interval: 10s
+      timeout: 5s
       retries: 15
-      start_period: 60s
+      start_period: 30s
 
   temporal-ui:
     image: temporalio/ui:2.26.2
