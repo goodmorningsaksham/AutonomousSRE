@@ -98,14 +98,27 @@ async def collect_evidence(
     return evidence
 
 
-def _build_user_prompt(incident_id: str, service: str, namespace: str, evidence: dict) -> str:
+def _build_user_prompt(
+    incident_id: str,
+    service: str,
+    namespace: str,
+    evidence: dict,
+    incident_title: str = "",
+    incident_alerts: list[dict] | None = None,
+) -> str:
     """Construct the evidence summary for the LLM."""
     lines = [
         f"## Incident: {incident_id}",
-        f"## Service: {service} (namespace: {namespace})",
-        "",
-        "## Telemetry Evidence",
+        f"## Service Under Investigation: {service} (namespace: {namespace})",
+        f"## Incident Title / Symptom: {incident_title or service}",
     ]
+
+    if incident_alerts:
+        lines.append("\n### Active Firing Alerts Triggering Incident:")
+        for al in incident_alerts:
+            lines.append(f"  • Alert: {al.get('name')} (Severity: {al.get('severity')}) — Summary: {al.get('summary')} — Details: {al.get('description')}")
+
+    lines.append("\n## Telemetry Evidence")
 
     # Prometheus metrics
     prom = evidence.get("prometheus", {})
@@ -184,8 +197,40 @@ async def run_rca(
     # 1. Collect evidence deterministically
     evidence = await collect_evidence(incident_id, service, namespace)
 
+    # 1b. Fetch active alerts and incident summary from DB
+    incident_title = ""
+    incident_alerts: list[dict] = []
+    try:
+        from database.session import AsyncSessionLocal
+        from database.models.models import Incident, Alert
+        from sqlalchemy import select
+        async with AsyncSessionLocal() as session:
+            inc_res = await session.execute(select(Incident).where(Incident.id == incident_id))
+            inc_obj = inc_res.scalar_one_or_none()
+            if inc_obj:
+                incident_title = inc_obj.title
+                al_res = await session.execute(select(Alert).where(Alert.incident_id == incident_id))
+                incident_alerts = [
+                    {
+                        "name": a.alert_name,
+                        "summary": a.summary or "",
+                        "description": a.description or "",
+                        "severity": a.severity or "warning",
+                    }
+                    for a in al_res.scalars().all()
+                ]
+    except Exception as e:
+        logger.warning("Could not fetch alerts for prompt context", error=str(e))
+
     # 2. Build prompt
-    user_prompt = _build_user_prompt(incident_id, service, namespace, evidence)
+    user_prompt = _build_user_prompt(
+        incident_id,
+        service,
+        namespace,
+        evidence,
+        incident_title=incident_title,
+        incident_alerts=incident_alerts,
+    )
 
     # 3. Call LLM
     llm = get_llm_provider()
